@@ -1,11 +1,10 @@
 // src/components/GuestbookContainer.tsx
-"use client"; // 클라이언트(브라우저)에서 상태를 관리해야 함
+"use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react"; // useEffect 추가!
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 
-// 데이터 타입 정의 (TypeScript가 좋아합니다)
 type Post = {
   id: number;
   content: string;
@@ -13,45 +12,63 @@ type Post = {
   created_at: string;
 };
 
-// 부모(서버)에게서 초기 데이터를 물려받습니다
 export default function GuestbookContainer({ initialPosts }: { initialPosts: Post[] }) {
-  const [posts, setPosts] = useState<Post[]>(initialPosts); // 화면에 보여줄 목록
+  const [posts, setPosts] = useState<Post[]>(initialPosts);
   const [content, setContent] = useState("");
   const [nickname, setNickname] = useState("");
   const router = useRouter();
+
+  // ▼▼▼ 1. [불러오기] 페이지가 처음 뜰 때, 로컬 저장소 확인 ▼▼▼
+  useEffect(() => {
+    // 개발 환경에서만 실행
+    if (process.env.NODE_ENV === "development") {
+      // 1. 'my_local_posts'라는 이름으로 저장된 게 있는지 확인
+      const savedData = localStorage.getItem("my_local_posts");
+      
+      if (savedData) {
+        const localPosts = JSON.parse(savedData);
+        // 2. 서버 데이터(initialPosts) 앞에 로컬 데이터(localPosts)를 합침
+        setPosts([...localPosts, ...initialPosts]);
+      }
+    }
+  }, [initialPosts]); // initialPosts가 바뀔 때마다 실행
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!content || !nickname) return alert("내용을 입력해주세요!");
 
-    // ▼▼▼ [핵심 로직: 환경 분리] ▼▼▼
     const isDev = process.env.NODE_ENV === "development";
 
     if (isDev) {
-      // 1. 개발 환경: 가짜 데이터를 만들어서 목록(State)에 강제로 끼워 넣음
+      // ▼▼▼ 2. [저장하기] 가짜 데이터를 로컬 저장소에 넣기 ▼▼▼
       const fakePost = {
-        id: Date.now(), // 임시 ID
+        id: Date.now(),
         content: content,
         nickname: nickname,
-        created_at: new Date().toISOString(), // 현재 시간
+        created_at: new Date().toISOString(),
       };
 
-      // 2. 화면 목록에 추가
-      setPosts([fakePost, ...posts]); 
-      
-      // ❌ 삭제: alert("🛠️ [개발 모드] 화면에만 추가되었습니다. (DB 저장 X)");
-      // ✅ 변경: 그냥 조용히 콘솔에만 로그 남기기 (선택사항)
-      console.log("개발 모드: UI에만 가짜 데이터 추가됨");
+      // 화면 업데이트
+      setPosts([fakePost, ...posts]);
 
-      // 3. 입력창 비우기 (마치 등록된 것처럼 자연스럽게)
+      // 로컬 스토리지 업데이트
+      // 1) 기존에 저장된 거 가져오기
+      const existingData = localStorage.getItem("my_local_posts");
+      const existingPosts = existingData ? JSON.parse(existingData) : [];
+      
+      // 2) 새 글을 맨 앞에 추가해서 다시 저장하기
+      const newLocalPosts = [fakePost, ...existingPosts];
+      localStorage.setItem("my_local_posts", JSON.stringify(newLocalPosts));
+
+      console.log("개발 모드: 로컬 스토리지에 저장됨 (새로고침 해도 유지됨)");
+
       setContent("");
       setNickname("");
-      return; // 여기서 끝! DB 요청 안 함.
+      return;
     }
-    // ▲▲▲ [여기까지가 모킹(Mocking)] ▲▲▲
 
-
-    // 2. 배포 환경: 실제로 DB에 저장
+    // --- 배포 환경 코드는 기존과 동일 ---
     const { error } = await supabase
       .from("guestbook")
       .insert([{ content, nickname }]);
@@ -60,13 +77,12 @@ export default function GuestbookContainer({ initialPosts }: { initialPosts: Pos
       alert("🎉 방명록이 등록되었습니다!");
       setContent("");
       setNickname("");
-      router.refresh(); // 서버 데이터를 다시 불러옴
+      router.refresh();
     }
   };
 
   return (
     <div className="w-full max-w-2xl mx-auto">
-      {/* 입력 폼 */}
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 mb-8 p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">
         <div className="flex gap-2">
           <input
@@ -89,7 +105,6 @@ export default function GuestbookContainer({ initialPosts }: { initialPosts: Pos
         </button>
       </form>
 
-      {/* 글 목록 (여기서 posts 상태를 보여줍니다) */}
       <div className="space-y-4">
         {posts.map((post) => (
           <div key={post.id} className="p-4 border rounded-lg shadow-sm bg-white dark:bg-gray-800 dark:border-gray-700">
