@@ -36,10 +36,14 @@ export default function GuestbookContainer({ initialPosts }: { initialPosts: Pos
         created_at: new Date().toISOString(), // 현재 시간
       };
 
-      // "기존 목록 앞에 가짜 데이터를 붙여라!"
+      // 2. 화면 목록에 추가
       setPosts([fakePost, ...posts]); 
       
-      alert("🛠️ [개발 모드] 화면에만 추가되었습니다. (DB 저장 X)");
+      // ❌ 삭제: alert("🛠️ [개발 모드] 화면에만 추가되었습니다. (DB 저장 X)");
+      // ✅ 변경: 그냥 조용히 콘솔에만 로그 남기기 (선택사항)
+      console.log("개발 모드: UI에만 가짜 데이터 추가됨");
+
+      // 3. 입력창 비우기 (마치 등록된 것처럼 자연스럽게)
       setContent("");
       setNickname("");
       return; // 여기서 끝! DB 요청 안 함.
