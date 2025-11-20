@@ -18,6 +18,23 @@ export default function GuestbookForm() {
       return;
     }
 
+    // ▼▼▼ [여기부터 추가/수정] ▼▼▼
+    
+    // 1. 현재 환경이 'development'(내 컴퓨터)인지 확인합니다.
+    const isDev = process.env.NODE_ENV === "development";
+
+    if (isDev) {
+      // 2. 개발 환경이면 가짜 성공 메시지만 띄우고 함수를 끝냅니다.
+      alert("[개발 모드] 실제 DB에는 저장되지 않았습니다! (기능 테스트 성공)");
+      
+      // 입력창 비우기 (마치 된 것처럼)
+      setContent("");
+      setNickname("");
+      return; // ★ 여기서 함수 강제 종료! (밑에 있는 supabase 코드가 실행 안 됨)
+    }
+
+    // ▲▲▲ [여기까지 추가/수정] ▲▲▲
+
     // 2. Supabase에 데이터 넣기 (INSERT)
     const { error } = await supabase
       .from("guestbook")
