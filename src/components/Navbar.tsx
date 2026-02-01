@@ -36,7 +36,7 @@ export default function Navbar() {
                   <Link href="/p32/suika" className="block px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-xl hover:bg-white/50 dark:hover:bg-gray-700/50 hover:text-blue-600 transition duration-200">
                     🍉 수박 게임
                   </Link>
-                  <Link href="/p32/cardpack" className="block px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-xl hover:bg-white/50 dark:hover:bg-gray-700/50 hover:text-blue-600 transition duration-200">
+                  <Link href="/p32/card" className="block px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-xl hover:bg-white/50 dark:hover:bg-gray-700/50 hover:text-blue-600 transition duration-200">
                     🃏 카드팩
                   </Link>
                 </div>
