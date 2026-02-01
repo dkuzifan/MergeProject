@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
 // --- Types ---
 type Card = {
@@ -31,8 +32,20 @@ type SimulationResult = {
   newPoints: number;
 };
 
+type UserSession = {
+  id: string;
+  email?: string;
+} | null;
+
 export default function CardSimulatorPage() {
   // --- State ---
+  const [user, setUser] = useState<UserSession>(null);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [isLoading, setIsLoading] = useState(false);
+
   const [cardsData, setCardsData] = useState<Card[]>([]);
   const [packsData, setPacksData] = useState<PackDef[]>([]);
   const [setNames, setSetNames] = useState<string[]>(Array(12).fill(""));
@@ -51,29 +64,33 @@ export default function CardSimulatorPage() {
   const packFileInputRef = useRef<HTMLInputElement>(null);
   const encodingRef = useRef<"utf-8" | "euc-kr">("utf-8");
 
-  // --- Initial Load ---
+  // --- Initial Load & Auth Check ---
   useEffect(() => {
-    // 1. Cards
-    const savedCards = localStorage.getItem("card_data_source");
-    if (savedCards) setCardsData(JSON.parse(savedCards));
-    else setCardsData(generateDefaultCards());
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser({ id: session.user.id, email: session.user.email });
+        loadDataFromSupabase(session.user.id, true); 
+      } else {
+        loadDataFromLocal();
+      }
+    };
+    checkSession();
 
-    // 2. Packs
-    const savedPacks = localStorage.getItem("pack_data_source");
-    if (savedPacks) setPacksData(JSON.parse(savedPacks));
-    else setPacksData(generateDefaultPacks());
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser({ id: session.user.id, email: session.user.email });
+      } else {
+        setUser(null);
+      }
+    });
 
-    // 3. Others
-    const savedSetNames = localStorage.getItem("card_set_names");
-    if (savedSetNames) setSetNames(JSON.parse(savedSetNames));
-    
-    const savedCollection = localStorage.getItem("card_collection");
-    if (savedCollection) setCollection(JSON.parse(savedCollection));
-
-    const savedPoints = localStorage.getItem("card_star_points");
-    if (savedPoints) setStarPoints(Number(savedPoints));
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
+  // --- Data Helpers ---
   const generateDefaultCards = (): Card[] => {
     return Array.from({ length: 108 }, (_, i) => {
       const id = i + 1;
@@ -99,7 +116,129 @@ export default function CardSimulatorPage() {
     });
   };
 
-  // --- Helpers ---
+  const loadDataFromLocal = () => {
+    const savedCards = localStorage.getItem("card_data_source");
+    setCardsData(savedCards ? JSON.parse(savedCards) : generateDefaultCards());
+
+    const savedPacks = localStorage.getItem("pack_data_source");
+    setPacksData(savedPacks ? JSON.parse(savedPacks) : generateDefaultPacks());
+
+    const savedSetNames = localStorage.getItem("card_set_names");
+    if (savedSetNames) setSetNames(JSON.parse(savedSetNames));
+    
+    const savedCollection = localStorage.getItem("card_collection");
+    if (savedCollection) setCollection(JSON.parse(savedCollection));
+
+    const savedPoints = localStorage.getItem("card_star_points");
+    if (savedPoints) setStarPoints(Number(savedPoints));
+  };
+
+  const loadDataFromSupabase = async (userId: string, silent = false) => {
+    if (!silent) setIsLoading(true);
+
+    try {
+      console.log("📡 DB 데이터 요청 시작...", userId);
+      
+      const { data, error } = await supabase
+        .from('user_game_data')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          console.warn("⚠️ 저장된 데이터가 없습니다.");
+          if (!silent) alert("☁️ 서버에 저장된 데이터가 없습니다. 먼저 저장해주세요!");
+          return;
+        }
+        throw error;
+      }
+
+      console.log("✅ DB 데이터 수신 성공:", data);
+
+      if (data) {
+        if (data.cards_data) setCardsData(data.cards_data);
+        if (data.packs_data) setPacksData(data.packs_data);
+        if (data.collection) setCollection(data.collection);
+        if (data.set_names) setSetNames(data.set_names);
+        if (data.star_points !== null) setStarPoints(Number(data.star_points));
+        
+        // LocalStorage 동기화
+        localStorage.setItem("card_data_source", JSON.stringify(data.cards_data));
+        localStorage.setItem("pack_data_source", JSON.stringify(data.packs_data));
+        localStorage.setItem("card_collection", JSON.stringify(data.collection));
+        localStorage.setItem("card_set_names", JSON.stringify(data.set_names));
+        localStorage.setItem("card_star_points", String(data.star_points));
+
+        if (!silent) alert("📥 서버에서 데이터를 성공적으로 불러왔습니다!");
+      }
+    } catch (err: any) {
+      console.error('Error loading data:', err);
+      if (!silent) alert(`데이터 로드 실패: ${err.message}`);
+    } finally {
+      if (!silent) setIsLoading(false);
+    }
+  };
+
+  const saveDataToSupabase = async () => {
+    if (!user) return alert("로그인이 필요합니다.");
+    setIsLoading(true);
+
+    const payload = {
+      user_id: user.id,
+      cards_data: cardsData,
+      packs_data: packsData,
+      collection: collection,
+      set_names: setNames,
+      star_points: starPoints,
+      updated_at: new Date().toISOString()
+    };
+
+    try {
+      const { error } = await supabase.from('user_game_data').upsert(payload);
+      if (error) throw error;
+      alert("☁️ 클라우드에 안전하게 저장되었습니다!");
+    } catch (err: any) {
+      console.error('Error saving:', err);
+      alert(`저장 실패: ${err.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // --- Auth Handlers ---
+  const handleAuth = async () => {
+    setIsLoading(true);
+    try {
+      if (authMode === 'signup') {
+        const { error } = await supabase.auth.signUp({ email: authEmail, password: authPassword });
+        if (error) throw error;
+        alert("가입 완료! 자동 로그인됩니다.");
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
+        if (error) throw error;
+        setIsAuthModalOpen(false);
+      }
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    // 로그아웃 시에는 완전 초기화 (토큰도 같이 날아가도 됨)
+    localStorage.clear(); 
+    setCardsData(generateDefaultCards());
+    setPacksData(generateDefaultPacks());
+    setCollection({});
+    setStarPoints(0);
+    setSetNames(Array(12).fill(""));
+  };
+
+  // --- Logic Helpers ---
   const handleSetRename = (index: number, newName: string) => {
     const newNames = [...setNames];
     newNames[index] = newName;
@@ -107,26 +246,32 @@ export default function CardSimulatorPage() {
     localStorage.setItem("card_set_names", JSON.stringify(newNames));
   };
 
-  const downloadCSV = (content: string, fileName: string) => {
-    const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", fileName);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
+  // [수정] 리셋 함수: 로그인 토큰은 살려두고 게임 데이터만 삭제
   const resetAllData = () => {
-    if (confirm("정말 모든 데이터를 초기화하시겠습니까? (복구 불가)")) {
-      localStorage.clear();
-      window.location.reload();
+    if (confirm("정말 모든 데이터를 초기화하시겠습니까? (저장되지 않은 내용은 사라집니다)")) {
+      // 1. State 초기화
+      setCardsData(generateDefaultCards());
+      setPacksData(generateDefaultPacks());
+      setCollection({});
+      setStarPoints(0);
+      setSetNames(Array(12).fill(""));
+      setLastResult([]);
+
+      // 2. LocalStorage에서 '게임 관련 키'만 삭제 (로그인 토큰은 유지됨)
+      const keysToRemove = [
+        "card_data_source",
+        "pack_data_source",
+        "card_set_names",
+        "card_collection",
+        "card_star_points"
+      ];
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+      
+      alert("데이터가 초기화되었습니다. (로그인은 유지됩니다)");
     }
   };
 
-  // --- File Import Logic ---
-  
+  // --- File Import ---
   const triggerImport = (type: "card" | "pack", encoding: "utf-8" | "euc-kr") => {
     encodingRef.current = encoding;
     if (type === "card") cardFileInputRef.current?.click();
@@ -146,25 +291,19 @@ export default function CardSimulatorPage() {
     });
   };
 
-  // 1. Card Import
   const handleCardCSVImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     try {
       const text = await readCSVFile(file);
       const lines = text.split("\n").map(l => l.trim()).filter(l => l);
-      
       const baseMap = new Map(generateDefaultCards().map(c => [c.id, c]));
       let successCount = 0;
-
       const startIndex = (lines[0].toUpperCase().startsWith("INDEX") || lines[0].startsWith("ID")) ? 1 : 0;
-
       for (let i = startIndex; i < lines.length; i++) {
         const cols = lines[i].split(",");
         const id = Number(cols[0]);
         if (isNaN(id) || id < 1 || id > 108) continue;
-
         baseMap.set(id, {
           id,
           name: cols[1]?.trim() || `Card No.${id}`,
@@ -174,35 +313,26 @@ export default function CardSimulatorPage() {
         });
         successCount++;
       }
-
       const sorted = Array.from(baseMap.values()).sort((a, b) => a.id - b.id);
+      setCardsData(sorted);
       localStorage.setItem("card_data_source", JSON.stringify(sorted));
-      alert(`✅ ${successCount}개의 카드 정보를 업데이트했습니다. 화면을 갱신합니다.`);
-      window.location.reload();
-
-    } catch (err) {
-      alert("파일 읽기 실패");
-    }
+      alert(`✅ ${successCount}개 카드 정보 업데이트. (저장 버튼을 눌러 클라우드에 반영하세요)`);
+    } catch (err) { alert("파일 읽기 실패"); }
     e.target.value = "";
   };
 
-  // 2. Pack Import
   const handlePackCSVImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     try {
       const text = await readCSVFile(file);
       const lines = text.split("\n").map(l => l.trim()).filter(l => l);
-      
       const newPacks: PackDef[] = [];
       const startIndex = (lines[0].toUpperCase().startsWith("INDEX") || lines[0].startsWith("ID")) ? 1 : 0;
-
       for (let i = startIndex; i < lines.length; i++) {
         const cols = lines[i].split(",");
         const id = Number(cols[0]);
         if (isNaN(id)) continue;
-
         newPacks.push({
           id,
           name: cols[1]?.trim() || `Pack ${id}`,
@@ -217,21 +347,27 @@ export default function CardSimulatorPage() {
           }
         });
       }
-
-      if (newPacks.length === 0) return alert("데이터를 읽지 못했습니다.");
-
+      if (newPacks.length === 0) return alert("데이터 없음");
       newPacks.sort((a, b) => a.id - b.id);
+      setPacksData(newPacks);
       localStorage.setItem("pack_data_source", JSON.stringify(newPacks));
-      alert(`✅ ${newPacks.length}개의 카드팩 정보를 업데이트했습니다. 화면을 갱신합니다.`);
-      window.location.reload();
-
-    } catch (err) {
-      alert("파일 읽기 실패");
-    }
+      alert(`✅ ${newPacks.length}개 팩 정보 업데이트. (저장 버튼을 눌러 클라우드에 반영하세요)`);
+    } catch (err) { alert("파일 읽기 실패"); }
     e.target.value = "";
   };
 
   // --- Export ---
+  const downloadCSV = (content: string, fileName: string) => {
+    const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const exportCardDataCSV = () => {
     const headers = ["INDEX,이름,이미지,등급(1-5),골드(0/1)"];
     const rows = cardsData.map(c => `${c.id},${c.name},${c.image},${c.rank},${c.isGold ? 1 : 0}`);
@@ -250,12 +386,9 @@ export default function CardSimulatorPage() {
   const drawOneCard = (pack: PackDef, minRank: number): Card => {
     const p = pack.probs;
     const candidates = [
-      { prob: p.g5, rank: 5, gold: true },
-      { prob: p.g4, rank: 4, gold: true },
-      { prob: p.r5, rank: 5, gold: false },
-      { prob: p.r4, rank: 4, gold: false },
-      { prob: p.r3, rank: 3, gold: false },
-      { prob: p.r2, rank: 2, gold: false },
+      { prob: p.g5, rank: 5, gold: true }, { prob: p.g4, rank: 4, gold: true },
+      { prob: p.r5, rank: 5, gold: false }, { prob: p.r4, rank: 4, gold: false },
+      { prob: p.r3, rank: 3, gold: false }, { prob: p.r2, rank: 2, gold: false },
       { prob: p.r1, rank: 1, gold: false },
     ].filter(item => item.rank >= minRank);
 
@@ -297,24 +430,17 @@ export default function CardSimulatorPage() {
   const updateCollection = (newCards: Card[]): number => {
     const nextCollection = { ...collection };
     let gainedPoints = 0;
-
     newCards.forEach(card => {
-      if (nextCollection[card.id] && nextCollection[card.id] > 0) {
-        gainedPoints += 1;
-      } else {
-        nextCollection[card.id] = 1;
-      }
+      if (nextCollection[card.id] && nextCollection[card.id] > 0) gainedPoints += 1;
+      else nextCollection[card.id] = 1;
     });
-
     setCollection(nextCollection);
     localStorage.setItem("card_collection", JSON.stringify(nextCollection));
-
     if (gainedPoints > 0) {
       const newTotalPoints = starPoints + gainedPoints;
       setStarPoints(newTotalPoints);
       localStorage.setItem("card_star_points", newTotalPoints.toString());
     }
-
     return gainedPoints;
   };
 
@@ -322,19 +448,12 @@ export default function CardSimulatorPage() {
     const pack = packsData.find(p => p.id === packId);
     const cards = drawCardsFromPack(packId);
     const earnedPoints = updateCollection(cards);
-    
-    setLastResult([{ 
-      packId, 
-      packName: pack?.name || `Pack ${packId}`, 
-      cards,
-      newPoints: earnedPoints
-    }]);
+    setLastResult([{ packId, packName: pack?.name || `Pack ${packId}`, cards, newPoints: earnedPoints }]);
   };
 
   const openBulkPacks = () => {
     let totalCards: Card[] = [];
     let totalPacks = 0;
-    
     packsData.forEach(pack => {
       const count = bulkInputs[pack.id] || 0;
       totalPacks += count;
@@ -342,16 +461,9 @@ export default function CardSimulatorPage() {
         totalCards = [...totalCards, ...drawCardsFromPack(pack.id)];
       }
     });
-    
     if (totalCards.length === 0) return alert("수량을 입력해주세요.");
-    
     const earnedPoints = updateCollection(totalCards);
-    setLastResult([{ 
-      packId: -1, 
-      packName: `총 ${totalPacks}팩 결과 (${totalCards.length}장)`, 
-      cards: totalCards,
-      newPoints: earnedPoints
-    }]);
+    setLastResult([{ packId: -1, packName: `총 ${totalPacks}팩 결과 (${totalCards.length}장)`, cards: totalCards, newPoints: earnedPoints }]);
   };
 
   const renderSets = () => {
@@ -399,7 +511,6 @@ export default function CardSimulatorPage() {
     const pack = packsData.find(p => p.id === packId);
     if (!pack) return null;
     const p = pack.probs;
-
     return (
       <div className="mt-4 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 text-xs">
         <p className="font-bold text-gray-500 mb-2">📊 {pack.name} 적용 확률</p>
@@ -421,9 +532,27 @@ export default function CardSimulatorPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 font-sans text-gray-800 dark:text-gray-100 pb-20 relative">
       
-      {/* Hidden File Inputs */}
+      {/* Hidden Inputs */}
       <input type="file" accept=".csv" ref={cardFileInputRef} onChange={handleCardCSVImport} className="hidden" />
       <input type="file" accept=".csv" ref={packFileInputRef} onChange={handlePackCSVImport} className="hidden" />
+
+      {/* Auth Modal */}
+      {isAuthModalOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl shadow-2xl p-6">
+            <h2 className="text-xl font-bold mb-4">{authMode === 'login' ? '🔑 로그인' : '📝 회원가입'}</h2>
+            <input type="email" placeholder="이메일" className="w-full p-2 border rounded mb-2 dark:bg-gray-900" value={authEmail} onChange={e => setAuthEmail(e.target.value)} />
+            <input type="password" placeholder="비밀번호" className="w-full p-2 border rounded mb-4 dark:bg-gray-900" value={authPassword} onChange={e => setAuthPassword(e.target.value)} />
+            <button onClick={handleAuth} disabled={isLoading} className="w-full bg-blue-600 text-white font-bold py-2 rounded mb-2 hover:bg-blue-700 disabled:bg-gray-400">
+              {isLoading ? '처리 중...' : (authMode === 'login' ? '로그인' : '가입하기')}
+            </button>
+            <div className="text-center text-xs text-gray-500">
+              {authMode === 'login' ? <span className="cursor-pointer underline" onClick={() => setAuthMode('signup')}>계정이 없나요? 회원가입</span> : <span className="cursor-pointer underline" onClick={() => setAuthMode('login')}>이미 계정이 있나요? 로그인</span>}
+            </div>
+            <button onClick={() => setIsAuthModalOpen(false)} className="w-full mt-4 text-gray-400 text-xs">닫기</button>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="max-w-6xl mx-auto mb-6 flex flex-col xl:flex-row justify-between items-center gap-4">
@@ -432,30 +561,38 @@ export default function CardSimulatorPage() {
           <p className="text-sm text-gray-500">데이터를 CSV로 관리하고 확률을 테스트하세요.</p>
         </div>
         
-        {/* CSV Controls */}
-        <div className="flex flex-wrap gap-4 justify-center bg-white dark:bg-gray-800 p-3 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-          
-          <div className="flex flex-col gap-1 items-center">
-             <span className="text-[10px] font-bold text-gray-400 uppercase">카드 데이터 (108종)</span>
-             <div className="flex gap-1">
-                <button onClick={() => triggerImport("card", "utf-8")} className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1.5 rounded hover:bg-blue-100 font-bold">Import (UTF-8)</button>
-                <button onClick={() => triggerImport("card", "euc-kr")} className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-1.5 rounded hover:bg-green-100 font-bold">Import (엑셀)</button>
-                <button onClick={exportCardDataCSV} className="text-xs bg-gray-50 text-gray-600 border border-gray-200 px-2 py-1.5 rounded hover:bg-gray-100 font-bold">Export</button>
-             </div>
-          </div>
+        <div className="flex flex-col items-end gap-2">
+          {user ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-blue-600 font-bold">{user.email}님</span>
+              <button onClick={saveDataToSupabase} disabled={isLoading} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 font-bold shadow disabled:bg-gray-400">
+                {isLoading ? '저장 중...' : '☁️ 서버 저장'}
+              </button>
+              <button onClick={() => loadDataFromSupabase(user.id)} disabled={isLoading} className="text-xs bg-gray-600 text-white px-3 py-1.5 rounded hover:bg-gray-700 font-bold shadow disabled:bg-gray-400">
+                {isLoading ? '로딩 중...' : '💾 불러오기'}
+              </button>
+              <button onClick={handleLogout} className="text-xs text-red-500 underline ml-2">로그아웃</button>
+            </div>
+          ) : (
+            <button onClick={() => setIsAuthModalOpen(true)} className="text-xs bg-blue-500 text-white px-4 py-2 rounded font-bold shadow animate-bounce">🔑 로그인하여 데이터 저장</button>
+          )}
 
-          <div className="w-px bg-gray-300 h-8 self-center hidden md:block"></div>
-
-          <div className="flex flex-col gap-1 items-center">
-             <span className="text-[10px] font-bold text-gray-400 uppercase">팩 설정 (12종)</span>
-             <div className="flex gap-1">
-                <button onClick={() => triggerImport("pack", "utf-8")} className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1.5 rounded hover:bg-blue-100 font-bold">Import (UTF-8)</button>
-                <button onClick={() => triggerImport("pack", "euc-kr")} className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-1.5 rounded hover:bg-green-100 font-bold">Import (엑셀)</button>
-                <button onClick={exportPackDataCSV} className="text-xs bg-gray-50 text-gray-600 border border-gray-200 px-2 py-1.5 rounded hover:bg-gray-100 font-bold">Export</button>
-             </div>
+          <div className="flex flex-wrap gap-2 justify-center bg-white dark:bg-gray-800 p-2 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+            <div className="flex gap-1 items-center">
+               <span className="text-[10px] text-gray-400 font-bold uppercase mr-1">카드</span>
+               <button onClick={() => triggerImport("card", "utf-8")} className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded font-bold">Import (UTF-8)</button>
+               <button onClick={() => triggerImport("card", "euc-kr")} className="text-[10px] bg-green-50 text-green-700 border border-green-200 px-2 py-1 rounded font-bold">Import (엑셀)</button>
+               <button onClick={exportCardDataCSV} className="text-[10px] bg-gray-50 text-gray-600 border border-gray-200 px-2 py-1 rounded font-bold">Export</button>
+            </div>
+            <div className="w-px bg-gray-300 h-6"></div>
+            <div className="flex gap-1 items-center">
+               <span className="text-[10px] text-gray-400 font-bold uppercase mr-1">팩</span>
+               <button onClick={() => triggerImport("pack", "utf-8")} className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded font-bold">Import (UTF-8)</button>
+               <button onClick={() => triggerImport("pack", "euc-kr")} className="text-[10px] bg-green-50 text-green-700 border border-green-200 px-2 py-1 rounded font-bold">Import (엑셀)</button>
+               <button onClick={exportPackDataCSV} className="text-[10px] bg-gray-50 text-gray-600 border border-gray-200 px-2 py-1 rounded font-bold">Export</button>
+            </div>
+            <button onClick={resetAllData} className="ml-2 text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded font-bold">RESET</button>
           </div>
-          
-          <button onClick={resetAllData} className="ml-2 text-xs bg-red-100 text-red-600 px-3 py-2 rounded hover:bg-red-200 font-bold h-fit self-center">RESET</button>
         </div>
       </div>
 
