@@ -2,690 +2,551 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import Matter from "matter-js";
+// Matter.js 동적 임포트 사용
 
-// --- 1. 마스터 데이터 (가로 450px 기준 2.3개 핏) ---
+// ----------------------------------------------------------------------
+// 1. 마스터 데이터 및 타입 정의
+// ----------------------------------------------------------------------
+const SCALE_RATIO = 0.8; // 기본 스케일
+
 type FruitDef = {
   id: number;
   name: string;
-  defaultRadius: number;
-  defaultColor: string;
+  radius: number;      
+  color: string;       
+  probability: number; 
+  img?: string;
+  originalWidth?: number;
+  originalHeight?: number;
 };
 
-const FRUIT_POOL: FruitDef[] = [
-  { id: 1, name: "블루베리", defaultRadius: 20, defaultColor: "#4F46E5" },
-  { id: 2, name: "크랜베리", defaultRadius: 24, defaultColor: "#DC2626" },
-  { id: 3, name: "체리", defaultRadius: 28, defaultColor: "#EF4444" },
-  { id: 4, name: "포도", defaultRadius: 32, defaultColor: "#7C3AED" },
-  { id: 5, name: "산딸기", defaultRadius: 36, defaultColor: "#EC4899" },
-  { id: 6, name: "딸기", defaultRadius: 41, defaultColor: "#F43F5E" },
-  { id: 7, name: "방울토마토", defaultRadius: 46, defaultColor: "#EF4444" },
-  { id: 8, name: "금귤", defaultRadius: 51, defaultColor: "#F59E0B" },
-  { id: 9, name: "살구", defaultRadius: 56, defaultColor: "#FB923C" },
-  { id: 10, name: "자두", defaultRadius: 61, defaultColor: "#7E22CE" },
-  { id: 11, name: "라임", defaultRadius: 66, defaultColor: "#84CC16" },
-  { id: 12, name: "레몬", defaultRadius: 71, defaultColor: "#FACC15" },
-  { id: 13, name: "키위", defaultRadius: 76, defaultColor: "#65A30D" },
-  { id: 14, name: "복숭아", defaultRadius: 81, defaultColor: "#FDBA74" },
-  { id: 15, name: "사과", defaultRadius: 85, defaultColor: "#DC2626" },
-  { id: 16, name: "배", defaultRadius: 89, defaultColor: "#EAB308" },
-  { id: 17, name: "오렌지", defaultRadius: 92, defaultColor: "#EA580C" },
-  { id: 18, name: "석류", defaultRadius: 94, defaultColor: "#9F1239" },
-  { id: 19, name: "멜론", defaultRadius: 96, defaultColor: "#86EFAC" },
-  { id: 20, name: "수박", defaultRadius: 98, defaultColor: "#10B981" },
+const INITIAL_FRUITS: FruitDef[] = [
+  { id: 1, name: "라즈베리", radius: (48/2)*SCALE_RATIO, color: "#E63E85", probability: 20, img: "/images/suika/fruit_00_raspberry.svg", originalWidth: 48, originalHeight: 48 },
+  { id: 2, name: "블루베리", radius: (68/2)*SCALE_RATIO, color: "#5B43D8", probability: 20, img: "/images/suika/fruit_01_blueberry.svg", originalWidth: 68, originalHeight: 68 },
+  { id: 3, name: "라임", radius: (95/2)*SCALE_RATIO, color: "#8AC249", probability: 15, img: "/images/suika/fruit_02_lime.svg", originalWidth: 95, originalHeight: 95 },
+  { id: 4, name: "망고스틴", radius: (124/2)*SCALE_RATIO, color: "#6D214F", probability: 15, img: "/images/suika/fruit_03_mangosteen.svg", originalWidth: 124, originalHeight: 124 },
+  { id: 5, name: "용과", radius: (152/2)*SCALE_RATIO, color: "#E63E85", probability: 15, img: "/images/suika/fruit_04_dragonfruit.svg", originalWidth: 152, originalHeight: 168 },
+  { id: 6, name: "파파야", radius: (180/2)*SCALE_RATIO, color: "#FF9F1C", probability: 10, img: "/images/suika/fruit_05_papaya.svg", originalWidth: 180, originalHeight: 190 },
+  { id: 7, name: "망고", radius: (208/2)*SCALE_RATIO, color: "#FF6B00", probability: 5, img: "/images/suika/fruit_06_mango.svg", originalWidth: 208, originalHeight: 196 },
+  { id: 8, name: "파인애플", radius: (222/2)*SCALE_RATIO, color: "#FFB300", probability: 0, img: "/images/suika/fruit_07_pineapple.svg", originalWidth: 222, originalHeight: 282 },
+  { id: 9, name: "두리안", radius: (295/2)*SCALE_RATIO, color: "#FCEBB6", probability: 0, img: "/images/suika/fruit_08_durian.svg", originalWidth: 295, originalHeight: 295 },
+  { id: 10, name: "코코넛", radius: (358/2)*SCALE_RATIO, color: "#F0EFE7", probability: 0, img: "/images/suika/fruit_09_coconut.svg", originalWidth: 358, originalHeight: 358 },
+  { id: 11, name: "수박", radius: (460/2)*SCALE_RATIO, color: "#4CAF50", probability: 0, img: "/images/suika/fruit_10_watermelon.svg", originalWidth: 460, originalHeight: 460 },
+  ...Array.from({ length: 9 }).map((_, i) => ({
+    id: 12 + i, name: `과일 ${12 + i}`, radius: 120 + i * 5, color: "#94a3b8", probability: 0
+  }))
 ];
 
-type GameFruitConfig = {
-  stage: number;
-  poolId: number;
-  name: string;
-  radius: number;
-  color: string;
-  probability: number;
-};
+type GameState = "READY" | "PLAYING" | "GAMEOVER";
 
-type GameStats = {
-  totalPlays: number;
-  totalScore: number;
-};
+// [수정 1] 캔버스 너비 조정 (450 -> 420)
+const CANVAS_WIDTH = 420;
+const CANVAS_HEIGHT = 700;
+const WALL_THICKNESS = 10;
 
 export default function SuikaPage() {
-  const DEFAULT_LEVELS = 11;
-  const CANVAS_WIDTH = 450; 
-  const CANVAS_HEIGHT = 640;
-
-  // --- [State] ---
-  const [activeConfig, setActiveConfig] = useState<GameFruitConfig[]>([]);
-  const [editConfig, setEditConfig] = useState<GameFruitConfig[]>([]);
+  const sceneRef = useRef<HTMLDivElement>(null);
   
-  const [levelCount, setLevelCount] = useState(DEFAULT_LEVELS);
-  const [maxShots, setMaxShots] = useState(50);
+  // 상태 관리
+  const [gameState, setGameState] = useState<GameState>("READY");
+  const [fruits, setFruits] = useState<FruitDef[]>(INITIAL_FRUITS); 
+  const [tempFruits, setTempFruits] = useState<FruitDef[]>(INITIAL_FRUITS); 
+
+  // 게임 설정
+  const [maxLevel, setMaxLevel] = useState(11);
+  const [spawnMaxLevel, setSpawnMaxLevel] = useState(5);
+  const [totalShots, setTotalShots] = useState(50); 
+  const [currentShots, setCurrentShots] = useState(50);
   const [watermelonScore, setWatermelonScore] = useState(100);
-  const [spawnLevel, setSpawnLevel] = useState(5);
 
-  const [gameState, setGameState] = useState<'ready' | 'playing' | 'gameover'>('ready');
-  const [shotsLeft, setShotsLeft] = useState(50);
-  const [currentScore, setCurrentScore] = useState(0);
-  const [watermelonCount, setWatermelonCount] = useState(0);
-  const [nextFruits, setNextFruits] = useState<GameFruitConfig[]>([]);
-  const [stats, setStats] = useState<GameStats>({ totalPlays: 0, totalScore: 0 });
+  // 점수 및 기록
+  const [score, setScore] = useState(0);
+  const [totalPlay, setTotalPlay] = useState(0);
+  const [totalScore, setTotalScore] = useState(0);
+  const [watermelonsCount, setWatermelonsCount] = useState(0);
+  const [isDanger, setIsDanger] = useState(false); 
 
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const engineRef = useRef<Matter.Engine | null>(null);
-  const renderRef = useRef<Matter.Render | null>(null);
-  const runnerRef = useRef<Matter.Runner | null>(null);
+  // 큐
+  const [nextQueue, setNextQueue] = useState<number[]>([]);
 
-  // --- [Helper] 확률 자동 분배 ---
-  const distributeProbabilities = (configs: GameFruitConfig[], maxSpawnCount: number): GameFruitConfig[] => {
-    const targetCount = Math.min(configs.length, maxSpawnCount);
-    if (targetCount <= 0) return configs;
+  // Refs 동기화
+  const engineRef = useRef<any>(null);
+  const renderRef = useRef<any>(null);
+  const fruitsRef = useRef(fruits); 
+  const queueRef = useRef<number[]>([]);
+  const gameStateRef = useRef<GameState>("READY");
+  const shotsRef = useRef(currentShots);
+  const watermelonScoreRef = useRef(watermelonScore);
 
-    const baseProb = Math.floor(1000 / targetCount);
-    const remainder = 1000 % targetCount;
+  useEffect(() => { fruitsRef.current = fruits; }, [fruits]);
+  useEffect(() => { queueRef.current = nextQueue; }, [nextQueue]);
+  useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
+  useEffect(() => { shotsRef.current = currentShots; }, [currentShots]);
+  useEffect(() => { watermelonScoreRef.current = watermelonScore; }, [watermelonScore]);
 
-    return configs.map((item, idx) => {
-      let prob = 0;
-      if (idx < targetCount) {
-        prob = baseProb + (idx < remainder ? 1 : 0);
+  // 확률 기반 랜덤 선택
+  const pickNextFruitId = () => {
+    const candidates = fruitsRef.current.filter(f => f.id <= spawnMaxLevel);
+    const totalProb = candidates.reduce((sum, f) => sum + f.probability, 0);
+    if (totalProb === 0) return 1;
+
+    let random = Math.random() * totalProb;
+    for (const f of candidates) {
+      if (random < f.probability) return f.id;
+      random -= f.probability;
+    }
+    return candidates[candidates.length - 1].id;
+  };
+
+  const fillQueue = () => {
+    setNextQueue(prev => {
+      const newQueue = [...prev];
+      while (newQueue.length < 10) {
+        newQueue.push(pickNextFruitId());
       }
-      return { ...item, probability: prob };
+      return newQueue;
     });
   };
 
-  // --- [초기화] ---
-  useEffect(() => {
-    let initialConfig = createInitialConfig(DEFAULT_LEVELS);
-    initialConfig = distributeProbabilities(initialConfig, 5);
-    setActiveConfig(initialConfig);
-    setEditConfig(initialConfig);
-
-    const savedStats = localStorage.getItem("suika_stats");
-    if (savedStats) setStats(JSON.parse(savedStats));
-  }, []);
-
-  const createInitialConfig = (count: number): GameFruitConfig[] => {
-    return Array.from({ length: count }, (_, i) => {
-      let fruitData = FRUIT_POOL[i % FRUIT_POOL.length];
-      if (i === count - 1) {
-        fruitData = FRUIT_POOL.find(f => f.id === 20)!;
-      }
-      return {
-        stage: i,
-        poolId: fruitData.id,
-        name: fruitData.name,
-        radius: fruitData.defaultRadius,
-        color: fruitData.defaultColor,
-        probability: 0,
-      };
-    });
-  };
-
-  // --- [CSV Export 기능] ---
-  const exportToCSV = () => {
-    // 1. 헤더 생성
-    const headers = [
-      "Stage(단계)", 
-      "Name(이름)", 
-      "Radius(크기)", 
-      "Color(색상)", 
-      "Probability(확률‰)", 
-      "GLOBAL_TotalLevel", 
-      "GLOBAL_SpawnLevel", 
-      "GLOBAL_MaxShots", 
-      "GLOBAL_WatermelonScore"
-    ];
-
-    // 2. 데이터 행 생성
-    const rows = editConfig.map((fruit, index) => {
-      // 글로벌 설정은 첫 번째 줄에만 기록 (나머지는 빈칸)
-      const globalTotalLevel = index === 0 ? levelCount : "";
-      const globalSpawnLevel = index === 0 ? spawnLevel : "";
-      const globalMaxShots = index === 0 ? maxShots : "";
-      const globalWatermelonScore = index === 0 ? watermelonScore : "";
-
-      return [
-        fruit.stage + 1,
-        fruit.name,
-        fruit.radius,
-        fruit.color,
-        fruit.probability || 0,
-        globalTotalLevel,
-        globalSpawnLevel,
-        globalMaxShots,
-        globalWatermelonScore
-      ].join(",");
-    });
-
-    // 3. BOM 추가 (한글 깨짐 방지) 및 CSV 문자열 조합
-    const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\n");
-
-    // 4. 다운로드 링크 생성 및 클릭
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    
-    // 파일명: suika_config_날짜_시간.csv
-    const date = new Date();
-    const fileName = `suika_config_${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate().toString().padStart(2,'0')}_${date.getHours().toString().padStart(2,'0')}${date.getMinutes().toString().padStart(2,'0')}.csv`;
-    
-    link.setAttribute("download", fileName);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  // --- [설정 핸들러] ---
-  const handleLevelCountChange = (newCount: number) => {
-    if (newCount < 2) newCount = 2;
-    if (newCount > 20) newCount = 20;
-    setLevelCount(newCount);
-
-    let newSpawnLevel = spawnLevel;
-    if (spawnLevel >= newCount) {
-      newSpawnLevel = newCount - 1;
-      setSpawnLevel(newSpawnLevel);
-    }
-
-    let newConfig = [...editConfig];
-    
-    if (newCount > newConfig.length) {
-      for (let i = newConfig.length; i < newCount; i++) {
-        const poolFruit = FRUIT_POOL[i % FRUIT_POOL.length];
-        newConfig.push({
-          stage: i,
-          poolId: poolFruit.id,
-          name: poolFruit.name,
-          radius: poolFruit.defaultRadius,
-          color: poolFruit.defaultColor,
-          probability: 0,
-        });
-      }
-    } else {
-      newConfig.splice(newCount);
-    }
-
-    const lastIdx = newConfig.length - 1;
-    const watermelon = FRUIT_POOL.find(f => f.id === 20)!;
-    newConfig[lastIdx] = {
-      ...newConfig[lastIdx],
-      poolId: watermelon.id,
-      name: watermelon.name,
-      radius: watermelon.defaultRadius,
-      color: watermelon.defaultColor,
-      probability: 0
-    };
-
-    newConfig = distributeProbabilities(newConfig, newSpawnLevel);
-    setEditConfig(newConfig);
-  };
-
-  const handleSpawnLevelChange = (newLevel: number) => {
-    setSpawnLevel(newLevel);
-    const newConfig = distributeProbabilities(editConfig, newLevel);
-    setEditConfig(newConfig);
-  };
-
-  const handleProbabilityChange = (index: number, val: number) => {
-    const newConfig = [...editConfig];
-    newConfig[index] = { ...newConfig[index], probability: val };
-    setEditConfig(newConfig);
-  };
-
-  const handleBaseFruitChange = (index: number, newPoolId: number) => {
-    if (index === editConfig.length - 1) return;
-    const target = FRUIT_POOL.find(f => f.id === newPoolId);
-    if (!target) return;
-    const newConfig = [...editConfig];
-    newConfig[index] = {
-      ...newConfig[index],
-      poolId: target.id,
-      name: target.name,
-      radius: target.defaultRadius,
-      color: target.defaultColor,
-    };
-    setEditConfig(newConfig);
-  };
-
-  const handlePropertyChange = (index: number, field: keyof GameFruitConfig, value: string | number) => {
-    if (index === editConfig.length - 1) return;
-    const newConfig = [...editConfig];
-    newConfig[index] = { ...newConfig[index], [field]: value };
-    setEditConfig(newConfig);
-  };
-
-  const applyConfig = () => {
-    let newConfig = [...editConfig];
-    const lastIndex = newConfig.length - 1;
-
-    const watermelon = FRUIT_POOL.find(f => f.id === 20)!;
-    newConfig[lastIndex] = {
-      ...newConfig[lastIndex],
-      poolId: watermelon.id,
-      name: watermelon.name,
-      radius: watermelon.defaultRadius,
-      color: watermelon.defaultColor,
-      probability: 0
-    };
-
-    const normalFruits = newConfig.slice(0, lastIndex);
-    normalFruits.sort((a, b) => a.radius - b.radius);
-
-    newConfig = [...normalFruits, newConfig[lastIndex]].map((item, idx) => ({
-      ...item,
-      stage: idx
-    }));
-
-    setEditConfig(newConfig);
-    setActiveConfig(newConfig);
-    
-    const validFruits = newConfig.slice(0, spawnLevel);
-    const totalProb = validFruits.reduce((sum, f) => sum + (f.probability || 0), 0);
-
-    alert(`✅ 설정 적용 완료!\n- 등장 범위: 1 ~ ${spawnLevel}단계\n- 설정된 확률 총합: ${totalProb}‰`);
-  };
-
-  const resetStats = () => {
-    if (confirm("누적 기록을 정말 초기화하시겠습니까?")) {
-      const resetData = { totalPlays: 0, totalScore: 0 };
-      setStats(resetData);
-      localStorage.setItem("suika_stats", JSON.stringify(resetData));
-    }
-  };
-
-  const stopGame = () => {
-    setGameState('ready');
-  };
-
-  // --- [게임 로직] ---
   const startGame = () => {
-    if (JSON.stringify(activeConfig) !== JSON.stringify(editConfig)) {
-      if (confirm("설정이 변경되었습니다. 적용 후 시작하시겠습니까?")) {
-        applyConfig();
-        return; 
-      } else {
-        setEditConfig(activeConfig);
-        setLevelCount(activeConfig.length);
-      }
+    setGameState("PLAYING");
+    setScore(0);
+    setWatermelonsCount(0);
+    setCurrentShots(totalShots);
+    setNextQueue([]);
+    setIsDanger(false);
+    setTimeout(fillQueue, 0);
+    setTotalPlay(prev => prev + 1);
+
+    if (engineRef.current) {
+      const Matter = require("matter-js");
+      const Composite = Matter.Composite;
+      const allBodies = Composite.allBodies(engineRef.current.world);
+      // 벽, 센서(static) 제외하고 제거
+      const fruitsToRemove = allBodies.filter((b: any) => !b.isStatic);
+      Composite.remove(engineRef.current.world, fruitsToRemove);
     }
-    setGameState('playing');
-    setShotsLeft(maxShots);
-    setCurrentScore(0);
-    setWatermelonCount(0);
-    const initialNext = Array.from({ length: 5 }, () => getRandomFruit(activeConfig));
-    setNextFruits(initialNext);
   };
 
-  const endGame = () => {
-    setGameState('gameover');
-    const newStats = {
-      totalPlays: stats.totalPlays + 1,
-      totalScore: stats.totalScore + currentScore,
-    };
-    setStats(newStats);
-    localStorage.setItem("suika_stats", JSON.stringify(newStats));
-  };
-
-  const getRandomFruit = (config: GameFruitConfig[]) => {
-    const validFruits = config.slice(0, spawnLevel);
-    const totalWeight = validFruits.reduce((sum, f) => sum + (f.probability || 0), 0);
-    
-    if (totalWeight <= 0) return config[0];
-
-    let randomValue = Math.random() * totalWeight;
-    for (const fruit of validFruits) {
-      if (randomValue < (fruit.probability || 0)) {
-        return fruit;
-      }
-      randomValue -= (fruit.probability || 0);
-    }
-    return validFruits[validFruits.length - 1];
-  };
-
-  // --- [물리 엔진] ---
+  // Matter.js 초기화
   useEffect(() => {
-    if (gameState !== 'playing' || !canvasRef.current) return;
+    if (!sceneRef.current) return;
 
-    const engine = Matter.Engine.create();
-    const world = engine.world;
-    engineRef.current = engine;
+    let Engine: any, Render: any, Runner: any, World: any, Bodies: any, Body: any, Events: any, Composite: any;
 
-    const render = Matter.Render.create({
-      canvas: canvasRef.current,
-      engine: engine,
-      options: {
-        width: CANVAS_WIDTH,
-        height: CANVAS_HEIGHT,
-        wireframes: false,
-        background: "transparent",
-      },
-    });
-    renderRef.current = render;
+    const init = async () => {
+      const MatterModule = await import("matter-js");
+      const Matter = MatterModule.default || MatterModule;
+      Engine = Matter.Engine;
+      Render = Matter.Render;
+      Runner = Matter.Runner;
+      World = Matter.World;
+      Bodies = Matter.Bodies;
+      Body = Matter.Body;
+      Events = Matter.Events;
+      Composite = Matter.Composite;
 
-    const wallOptions = { isStatic: true, render: { fillStyle: "#374151" } };
-    const ground = Matter.Bodies.rectangle(CANVAS_WIDTH / 2, CANVAS_HEIGHT, CANVAS_WIDTH, 60, wallOptions);
-    const leftWall = Matter.Bodies.rectangle(-30, CANVAS_HEIGHT / 2, 60, CANVAS_HEIGHT * 2, wallOptions);
-    const rightWall = Matter.Bodies.rectangle(CANVAS_WIDTH + 30, CANVAS_HEIGHT / 2, 60, CANVAS_HEIGHT * 2, wallOptions);
-    Matter.World.add(world, [ground, leftWall, rightWall]);
+      const engine = Engine.create();
+      engineRef.current = engine;
 
-    Matter.Events.on(engine, "collisionStart", (event) => {
-      const pairs = event.pairs;
-      pairs.forEach((pair) => {
-        const bodyA = pair.bodyA;
-        const bodyB = pair.bodyB;
+      const render = Render.create({
+        element: sceneRef.current,
+        engine: engine,
+        options: {
+          width: CANVAS_WIDTH,
+          height: CANVAS_HEIGHT,
+          wireframes: false,
+          background: "#F7F4EB",
+        },
+      });
+      renderRef.current = render;
 
-        if (bodyA.label.startsWith("fruit_") && bodyA.label === bodyB.label) {
-          if ((bodyA as any).isMerging || (bodyB as any).isMerging) return;
-          (bodyA as any).isMerging = true;
-          (bodyB as any).isMerging = true;
+      // 벽 생성 (너비 상수에 맞춰 조정)
+      const ground = Bodies.rectangle(CANVAS_WIDTH / 2, CANVAS_HEIGHT - 10, CANVAS_WIDTH, 20, { isStatic: true, render: { fillStyle: "#E6DCC8" } });
+      const leftWall = Bodies.rectangle(WALL_THICKNESS / 2, CANVAS_HEIGHT / 2, WALL_THICKNESS, CANVAS_HEIGHT, { isStatic: true, render: { fillStyle: "#E6DCC8" } });
+      const rightWall = Bodies.rectangle(CANVAS_WIDTH - WALL_THICKNESS / 2, CANVAS_HEIGHT / 2, WALL_THICKNESS, CANVAS_HEIGHT, { isStatic: true, render: { fillStyle: "#E6DCC8" } });
+      
+      const deadLineY = 210;
+      const deadLineSensor = Bodies.rectangle(CANVAS_WIDTH / 2, deadLineY, CANVAS_WIDTH, 2, { 
+        isStatic: true, 
+        isSensor: true, 
+        label: "deadLine",
+        render: { fillStyle: "transparent" }
+      });
 
-          const currentStage = parseInt(bodyA.label.split("_")[1]);
-          const maxStage = activeConfig.length - 1;
+      World.add(engine.world, [ground, leftWall, rightWall, deadLineSensor]);
 
-          Matter.World.remove(world, [bodyA, bodyB]);
+      const createFruit = (x: number, y: number, id: number, isDynamic = true) => {
+        const def = fruitsRef.current.find(f => f.id === id);
+        if (!def) return null;
 
-          if (currentStage < maxStage) {
-            const nextStage = currentStage + 1;
-            const nextFruit = activeConfig[nextStage];
-            const midX = (bodyA.position.x + bodyB.position.x) / 2;
-            const midY = (bodyA.position.y + bodyB.position.y) / 2;
+        const radius = def.radius;
+        // 좌표 강제 보정 (벽 두께 + 반지름만큼 여유)
+        const safeX = Math.max(WALL_THICKNESS + radius, Math.min(CANVAS_WIDTH - WALL_THICKNESS - radius, x));
 
-            const newBody = Matter.Bodies.circle(midX, midY, nextFruit.radius, {
-              restitution: 0.3,
-              render: { fillStyle: nextFruit.color },
-              label: `fruit_${nextStage}`,
-            });
-            Matter.World.add(world, newBody);
+        const physicsRadius = radius; 
 
-            if (nextStage === maxStage) {
-              setWatermelonCount(prev => prev + 1);
-              setCurrentScore(prev => prev + watermelonScore);
+        let scaleY = 1;
+        if (def.img && def.originalWidth && def.originalHeight) {
+          scaleY = def.originalHeight / def.originalWidth;
+        }
+
+        const body = Bodies.circle(safeX, y, physicsRadius, {
+          label: `fruit_${def.id}`,
+          restitution: 0.2,
+          isStatic: !isDynamic,
+          // [수정 2] 새로 생성되는 과일임을 식별하기 위한 플래그
+          isNewSpawn: true, 
+          render: {
+            fillStyle: def.img ? "transparent" : def.color,
+            sprite: def.img ? {
+              texture: def.img,
+              xScale: (radius * 2) / (def.originalWidth || radius * 2),
+              yScale: (radius * 2 * scaleY) / (def.originalHeight || radius * 2),
+            } : undefined
+          }
+        });
+
+        // 생성 후 일정 시간 뒤에는 "새 과일 아님"으로 처리 (충돌 로직용)
+        setTimeout(() => {
+            if (body) body.isNewSpawn = false;
+        }, 1000);
+
+        if (scaleY !== 1) {
+          Body.scale(body, 1, scaleY);
+        }
+
+        return body;
+      };
+
+      // 입력 핸들러
+      const handleInput = (e: MouseEvent | TouchEvent) => {
+        if (gameStateRef.current !== "PLAYING") return;
+        if (shotsRef.current <= 0) return;
+
+        const rect = render.canvas.getBoundingClientRect();
+        let clientX = 0;
+        if ('touches' in e) clientX = (e as TouchEvent).touches[0].clientX;
+        else clientX = (e as MouseEvent).clientX;
+        
+        // 생성 위치 결정 (새 너비 기준)
+        const nextId = queueRef.current[0];
+        const nextDef = fruitsRef.current.find(f => f.id === nextId);
+        const r = nextDef ? nextDef.radius : 20;
+
+        const minX = WALL_THICKNESS + r; 
+        const maxX = CANVAS_WIDTH - WALL_THICKNESS - r; 
+        
+        const x = Math.max(minX, Math.min(maxX, clientX - rect.left));
+
+        const currentQueue = [...queueRef.current];
+        if (currentQueue.length === 0) return;
+        
+        const spawnId = currentQueue.shift();
+        setNextQueue(currentQueue);
+        setTimeout(fillQueue, 0);
+
+        setCurrentShots(prev => {
+          const next = prev - 1;
+          if (next <= 0) {
+            setTimeout(() => {
+               setGameState("GAMEOVER");
+               setTotalScore(s => s + score); 
+            }, 2000);
+          }
+          return next;
+        });
+
+        if (spawnId) {
+          const body = createFruit(x, 50, spawnId);
+          if (body) World.add(engine.world, body);
+        }
+      };
+
+      render.canvas.addEventListener("mousedown", handleInput);
+      render.canvas.addEventListener("touchstart", handleInput, { passive: false });
+
+      // [수정 2] 데드라인 감지 로직 개선
+      Events.on(engine, "collisionActive", (event: any) => {
+        const pairs = event.pairs;
+        let dangerDetected = false;
+
+        pairs.forEach((pair: any) => {
+          const { bodyA, bodyB } = pair;
+          
+          // 센서인지 확인
+          const sensor = bodyA.label === "deadLine" ? bodyA : (bodyB.label === "deadLine" ? bodyB : null);
+          const fruit = sensor === bodyA ? bodyB : (sensor === bodyB ? bodyA : null);
+
+          if (sensor && fruit) {
+             // 아직 떨어지고 있는 중인 과일(isNewSpawn)은 무시
+             // 속도가 거의 0이거나(안정화됨), 이미 다른 과일 위에 쌓여있는 경우만 체크
+             if (!fruit.isNewSpawn && fruit.speed < 0.5) {
+                dangerDetected = true;
+             }
+          }
+        });
+
+        if (dangerDetected) setIsDanger(true);
+        else setIsDanger(false);
+      });
+
+      Events.on(engine, "collisionStart", (event: any) => {
+        const pairs = event.pairs;
+        pairs.forEach((pair: any) => {
+          const { bodyA, bodyB } = pair;
+          if (bodyA.label.startsWith("fruit_") && bodyB.label.startsWith("fruit_")) {
+            const idA = parseInt(bodyA.label.split("_")[1]);
+            const idB = parseInt(bodyB.label.split("_")[1]);
+
+            if (idA === idB) {
+              if (!Composite.get(engine.world, bodyA.id, "body") || !Composite.get(engine.world, bodyB.id, "body")) return;
+
+              const nextId = idA + 1;
+              const nextDef = fruitsRef.current.find(f => f.id === nextId);
+
+              if (nextDef) {
+                const midX = (bodyA.position.x + bodyB.position.x) / 2;
+                const midY = (bodyA.position.y + bodyB.position.y) / 2;
+                
+                World.remove(engine.world, [bodyA, bodyB]);
+                
+                if (nextId === 11) {
+                    setScore(prev => prev + watermelonScoreRef.current);
+                    setWatermelonsCount(p => p + 1);
+                }
+
+                // 합쳐져서 나온 새 과일은 isNewSpawn=false로 처리 (바로 감지 대상 되도록)
+                const newBody = createFruit(midX, midY, nextId, true);
+                if (newBody) {
+                    newBody.isNewSpawn = false; 
+                    World.add(engine.world, newBody);
+                }
+              }
             }
           }
-        }
+        });
       });
-    });
 
-    Matter.Render.run(render);
-    const runner = Matter.Runner.create();
-    Matter.Runner.run(runner, engine);
-    runnerRef.current = runner;
+      const runner = Runner.create();
+      Runner.run(runner, engine);
+      Render.run(render);
+    };
+
+    init();
 
     return () => {
-      Matter.Render.stop(render);
-      Matter.Runner.stop(runner);
-      Matter.World.clear(world, false);
-      Matter.Engine.clear(engine);
+      if (renderRef.current && renderRef.current.canvas) renderRef.current.canvas.remove();
     };
-  }, [gameState, activeConfig, watermelonScore]);
+  }, []);
 
-  useEffect(() => {
-    if (gameState !== 'playing' || !engineRef.current) return;
-    const checkInterval = setInterval(() => {
-      if (shotsLeft > 0) return;
-      const bodies = Matter.Composite.allBodies(engineRef.current!.world);
-      const fruits = bodies.filter(b => b.label.startsWith("fruit_"));
-      if (fruits.length === 0) { endGame(); return; }
-      const isAllSleeping = fruits.every(b => b.speed < 0.15 && b.angularSpeed < 0.15);
-      if (isAllSleeping) endGame();
-    }, 1000);
-    return () => clearInterval(checkInterval);
-  }, [gameState, shotsLeft]);
-
-  const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (gameState !== 'playing' || !engineRef.current || nextFruits.length === 0 || shotsLeft <= 0) return;
-
-    setShotsLeft(prev => prev - 1);
-    const rect = canvasRef.current!.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const currentFruit = nextFruits[0];
-    const safeRadius = currentFruit.radius;
-    const clampedX = Math.max(safeRadius, Math.min(x, CANVAS_WIDTH - safeRadius));
-
-    const fruitBody = Matter.Bodies.circle(clampedX, 50, currentFruit.radius, {
-      restitution: 0.3,
-      render: { fillStyle: currentFruit.color },
-      label: `fruit_${currentFruit.stage}`,
+  const handleTempChange = (index: number, key: string, value: any) => {
+    setTempFruits(prev => {
+      const next = [...prev];
+      (next[index] as any)[key] = value;
+      return next;
     });
-    Matter.World.add(engineRef.current.world, fruitBody);
-    const newNextList = [...nextFruits.slice(1), getRandomFruit(activeConfig)];
-    setNextFruits(newNextList);
+  };
+
+  const applySettings = () => {
+    setFruits(tempFruits);
+    alert("설정이 적용되었습니다!");
   };
 
   return (
-    <div className="min-h-screen p-8 bg-gray-100 dark:bg-gray-950 text-gray-800 dark:text-gray-100 font-sans flex flex-col items-center">
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 py-8 px-4 font-sans select-none touch-none">
       
-      <div className="w-full max-w-[1000px] mb-8 bg-white dark:bg-gray-900 p-4 rounded-xl shadow-md border border-gray-200 dark:border-gray-800 flex justify-between items-center">
-        <div className="flex gap-8">
-          <div className="text-center">
-            <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Total Plays</p>
-            <p className="text-2xl font-black text-blue-600">{stats.totalPlays}</p>
-          </div>
-          <div className="text-center">
-            <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Total Score</p>
-            <p className="text-2xl font-black text-green-600">{stats.totalScore.toLocaleString()}</p>
-          </div>
+      {/* 상단 정보창 */}
+      <div className="max-w-6xl mx-auto flex justify-between items-center mb-6 bg-white p-4 rounded-xl shadow-sm">
+        <h1 className="text-xl font-bold text-gray-800">🍉 수박게임 시뮬레이터</h1>
+        <div className="flex gap-6 text-sm text-gray-700"> 
+           <div>Total Plays: <span className="font-bold text-gray-900">{totalPlay}</span></div>
+           <div>Total Score: <span className="font-bold text-gray-900">{totalScore}</span></div>
+           <button onClick={() => { setTotalPlay(0); setTotalScore(0); }} className="text-red-500 underline font-semibold">기록 초기화</button>
         </div>
-        <h1 className="text-xl font-bold text-gray-700 dark:text-gray-200 hidden md:block">🍉 수박게임 시뮬레이터</h1>
-        <button onClick={resetStats} className="text-xs text-red-400 hover:text-red-600 underline">
-          기록 초기화
-        </button>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-8 items-start justify-center w-full max-w-[1400px]">
+      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* === 좌측: 게임 플레이 === */}
-        <div className="flex gap-4 items-start">
-          <div 
-            className="relative bg-gray-900 rounded-[2.5rem] p-4 shadow-2xl border-4 border-gray-800 select-none"
-            style={{ width: CANVAS_WIDTH + 32, height: CANVAS_HEIGHT + 32 }} 
-          >
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-gray-900 rounded-b-xl z-20"></div>
-            <div className="relative bg-amber-50 dark:bg-gray-800 rounded-[2rem] overflow-hidden cursor-crosshair h-full w-full" onClick={handleCanvasClick}>
-              <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="block w-full h-full" />
-              
-              {gameState === 'playing' && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); stopGame(); }}
-                  className="absolute top-8 right-1/2 translate-x-1/2 bg-red-500/80 hover:bg-red-600 text-white font-bold py-1 px-4 rounded-full shadow-md z-30 text-xs backdrop-blur-md transition"
-                >
-                  ⏹ End Game
+        {/* --- 왼쪽: 시뮬레이션 영역 --- */}
+        <div className="col-span-1 lg:col-span-2 flex flex-col items-center">
+          <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg w-fit relative">
+            
+            {/* 오버레이 UI */}
+            {gameState === "READY" && (
+              <div className="absolute inset-0 z-40 bg-black/50 rounded-xl flex flex-col items-center justify-center text-white">
+                <h2 className="text-3xl font-bold mb-4">READY</h2>
+                <button onClick={startGame} className="px-8 py-3 bg-indigo-600 rounded-full font-bold hover:bg-indigo-500 transition">
+                  START GAME
                 </button>
-              )}
-
-              {gameState === 'playing' && (
-                <>
-                  <div className="absolute top-8 left-4 bg-white/90 dark:bg-gray-900/90 backdrop-blur px-3 py-1 rounded-full shadow border border-gray-200 dark:border-gray-700 z-10 flex items-center gap-2">
-                    <span className="text-xs font-bold text-gray-500">SHOT</span>
-                    <span className={`text-lg font-black ${shotsLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-blue-600'}`}>{shotsLeft}</span>
-                  </div>
-                  <div className="absolute top-8 right-4 bg-white/90 dark:bg-gray-900/90 backdrop-blur px-3 py-1 rounded-full shadow border border-gray-200 dark:border-gray-700 z-10 text-right">
-                    <p className="text-[10px] font-bold text-gray-400 leading-none">SCORE</p>
-                    <p className="text-xl font-black text-green-600 leading-none mt-0.5">{currentScore}</p>
-                  </div>
-                </>
-              )}
-
-              {gameState === 'ready' && (
-                <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center z-30">
-                  <div className="text-center mb-8">
-                    <h2 className="text-white text-5xl font-black drop-shadow-xl mb-2">READY</h2>
-                    <p className="text-white/80 text-sm">화면을 클릭해서 과일을 떨어뜨리세요</p>
-                  </div>
-                  <button onClick={startGame} className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white text-xl font-bold py-4 px-12 rounded-full shadow-lg transition transform hover:scale-105 active:scale-95">START GAME</button>
+              </div>
+            )}
+            {gameState === "GAMEOVER" && (
+              <div className="absolute inset-0 z-40 bg-black/80 rounded-xl flex flex-col items-center justify-center text-white">
+                <h2 className="text-3xl font-bold mb-2 text-red-400">GAME OVER</h2>
+                <div className="text-center mb-6">
+                  <p className="text-xl font-bold text-amber-500">획득 점수: {score}</p>
+                  <p className="text-lg">🍉 Count: {watermelonsCount}</p>
                 </div>
-              )}
+                <button onClick={startGame} className="px-8 py-3 bg-green-600 rounded-full font-bold hover:bg-green-500 transition">
+                  다시 하기
+                </button>
+              </div>
+            )}
 
-              {gameState === 'gameover' && (
-                <div className="absolute inset-0 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center z-40 animate-fade-in">
-                  <h2 className="text-red-500 text-4xl font-black mb-2 tracking-tighter">GAME OVER</h2>
-                  <p className="text-gray-400 text-sm mb-8">모든 기회를 소진했습니다</p>
-                  <div className="bg-white/10 p-6 rounded-2xl text-center mb-8 backdrop-blur-lg border border-white/10 w-64">
-                    <p className="text-xs text-gray-400 font-bold uppercase mb-1">Final Score</p>
-                    <p className="text-4xl font-black text-white mb-2">{currentScore}</p>
-                    <div className="h-px bg-white/20 my-3"></div>
-                    <p className="text-xs text-gray-300">🍉 수박 {watermelonCount}개 완성</p>
-                  </div>
-                  <button onClick={startGame} className="bg-blue-600 hover:bg-blue-500 text-white text-lg font-bold py-3 px-10 rounded-full shadow-lg transition transform hover:scale-105">다시 하기</button>
-                </div>
-              )}
+            {/* 인게임 정보바 (너비 수정: w-[420px]) */}
+            <div className="flex justify-between items-center mb-2 px-2" style={{ width: `${CANVAS_WIDTH}px` }}>
+              <div className="text-xl font-black text-amber-500">획득 점수: {score}</div>
+              <div className="flex items-center gap-4">
+                 <div className="text-sm font-mono bg-gray-200 px-3 py-1 rounded text-gray-800 font-bold border border-gray-300">
+                   Shots: <span className={currentShots < 10 ? "text-red-600" : "text-gray-900"}>{currentShots}</span>
+                 </div>
+                 <button onClick={() => setGameState("READY")} className="text-xs text-red-500 font-bold hover:text-red-700">중도 포기</button>
+              </div>
             </div>
-          </div>
 
-          <div className="flex flex-col gap-0 h-full pt-8">
-            <div className="bg-gray-800 text-white text-[10px] font-bold text-center py-2 rounded-t-lg shadow-md w-[80px] tracking-widest">NEXT</div>
-            <div className="bg-gray-200 dark:bg-gray-800 p-2 rounded-b-lg border border-gray-300 dark:border-gray-700 overflow-y-auto w-[80px] shadow-inner scrollbar-hide" style={{ height: CANVAS_HEIGHT - 40 }}>
-              {gameState === 'playing' ? (
-                <div className="flex flex-col gap-4 items-center py-2">
-                  {nextFruits.map((fruit, idx) => (
-                    <div key={idx} className={`flex flex-col items-center transition-all ${idx === 0 ? 'scale-110 opacity-100' : 'opacity-40 scale-75 blur-[1px]'}`}>
-                      {idx === 0 && <span className="text-[10px] text-red-500 font-bold mb-1 animate-bounce">▼</span>}
-                      <div className="rounded-full shadow-lg border border-black/10" style={{ width: Math.min(fruit.radius, 40) + 'px', height: Math.min(fruit.radius, 40) + 'px', backgroundColor: fruit.color }} />
+            {/* 메인 캔버스 + Next 큐 */}
+            <div className="flex gap-2">
+              {/* 캔버스 (너비 420px로 수정) */}
+              <div className="relative overflow-hidden rounded-lg border-2 border-gray-200 bg-[#F7F4EB]" style={{ width: `${CANVAS_WIDTH}px`, height: `${CANVAS_HEIGHT}px` }}>
+                
+                {/* 데드라인 선 (z-30) */}
+                <div 
+                  className={`absolute left-0 w-full h-[2px] z-30 pointer-events-none transition-colors duration-200 ${isDanger ? "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)]" : "bg-gray-300"}`} 
+                  style={{ top: '210px' }} 
+                />
+
+                {gameState === "PLAYING" && nextQueue.length > 0 && (
+                  <div className="absolute top-2 left-1/2 transform -translate-x-1/2 flex flex-col items-center z-10 pointer-events-none">
+                    <span className="text-[10px] text-gray-400 mb-1">NEXT</span>
+                    {(() => {
+                      const f = fruits.find(i => i.id === nextQueue[0]);
+                      if (!f) return null;
+                      return (
+                        <div className="w-10 h-10 flex items-center justify-center bg-white/50 rounded-full shadow-sm">
+                           {f.img ? <img src={f.img} className="w-8 h-8 object-contain"/> : <div className="w-4 h-4 rounded-full" style={{backgroundColor: f.color}}/>}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+                <div ref={sceneRef} className="cursor-pointer w-full h-full relative z-10" />
+              </div>
+
+              {/* Next UI (Flex-shrink 방지) */}
+              <div className="w-16 flex-shrink-0 flex flex-col gap-1 py-2 bg-gray-50 rounded-lg items-center overflow-hidden border">
+                <span className="text-[10px] font-bold text-gray-400 mb-1">WAITING</span>
+                {nextQueue.slice(1, 11).map((nid, idx) => {
+                  const f = fruits.find(i => i.id === nid);
+                  if (!f) return null;
+                  return (
+                    <div key={idx} className="w-10 h-10 flex-shrink-0 bg-white rounded-full flex items-center justify-center border shadow-sm relative">
+                      {f.img ? <img src={f.img} className="w-8 h-8 object-contain"/> : <div className="w-4 h-4 rounded-full" style={{backgroundColor: f.color}}/>}
+                      <span className="absolute -bottom-1 -right-1 text-[8px] bg-gray-800 text-white px-1 rounded-full">{f.id}</span>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center text-gray-400 text-[10px] text-center gap-1 opacity-50"><span>Press</span><span>Start</span></div>
-              )}
+                  );
+                })}
+              </div>
             </div>
+
           </div>
         </div>
 
-        {/* === 우측: 설정 패널 === */}
-        <div className="w-full lg:w-[450px] bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xl flex flex-col overflow-hidden" style={{ height: CANVAS_HEIGHT + 32 }}>
-          <div className="p-5 border-b border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur z-10 space-y-4">
-            <div className="flex justify-between items-center">
-              <h2 className="text-lg font-bold flex items-center gap-2 text-gray-800 dark:text-white">⚙️ 룰 & 서열</h2>
-              <div className="flex gap-2">
-                {/* [버튼] CSV 저장 */}
-                <button onClick={exportToCSV} className="bg-gray-500 hover:bg-gray-600 text-white text-xs font-bold px-3 py-2 rounded-lg shadow transition transform active:scale-95">
-                  📥 CSV 저장
-                </button>
-                <button onClick={applyConfig} className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-lg shadow-lg shadow-blue-500/30 transition transform active:scale-95">
-                  적용하기
-                </button>
-              </div>
-            </div>
+        {/* --- 오른쪽: 룰 & 설정 --- */}
+        <div className="col-span-1">
+          <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg h-full max-h-[850px] overflow-y-auto">
             
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">총 단계</label>
-                <input type="number" min={2} max={20} value={levelCount} onChange={(e) => handleLevelCountChange(Number(e.target.value))} className="w-full bg-transparent text-center font-black text-xl text-gray-700 dark:text-gray-200 outline-none" />
-              </div>
-              
-              <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                <label className="block text-[10px] font-bold text-blue-500 uppercase mb-1">최대 등장 단계</label>
-                <div className="flex items-center justify-center gap-1">
-                  <span className="text-xs text-gray-400">~ Lv.</span>
-                  <input 
-                    type="number" 
-                    min={1} 
-                    max={levelCount - 1} 
-                    value={spawnLevel} 
-                    onChange={(e) => handleSpawnLevelChange(Number(e.target.value))} 
-                    className="w-12 bg-transparent text-center font-black text-xl text-blue-600 outline-none" 
-                  />
-                </div>
-              </div>
-
-              <div className="col-span-2 bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center justify-between">
-                <label className="text-[10px] font-bold text-gray-400 uppercase">발사 횟수</label>
-                <input type="number" value={maxShots} onChange={(e) => setMaxShots(Number(e.target.value))} className="w-20 bg-transparent text-right font-black text-xl text-gray-700 dark:text-gray-200 outline-none" />
-              </div>
-
-              <div className="col-span-2 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 p-3 rounded-xl border border-green-100 dark:border-green-900/30 flex items-center justify-between px-4">
-                <span className="text-xs font-bold text-green-700 dark:text-green-400">👑 수박 점수</span>
-                <input type="number" value={watermelonScore} onChange={(e) => setWatermelonScore(Number(e.target.value))} className="w-20 bg-transparent text-right font-black text-lg text-green-600 outline-none" />
+            <div className="flex justify-between items-center mb-4 border-b pb-2">
+              <h2 className="text-lg font-bold text-gray-800">⚙️ 룰 & 서열</h2>
+              <div className="flex gap-2">
+                <button className="text-xs bg-gray-200 text-gray-800 px-3 py-1 rounded font-bold hover:bg-gray-300 border border-gray-300">
+                  CSV 추출
+                </button>
+                <button onClick={applySettings} className="text-xs bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700 font-bold">적용하기</button>
               </div>
             </div>
-            <p className="text-[10px] text-gray-400 text-center">* 적용하기를 누르면 확률이 유지된 채 과일 크기순 정렬됩니다.</p>
-          </div>
 
-          <div className="overflow-y-auto flex-1 p-4 space-y-0 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-700">
-            {editConfig.map((fruit, index) => {
-              const isLast = index === editConfig.length - 1;
-              const isSpawnable = index < spawnLevel;
+            <div className="grid grid-cols-2 gap-3 mb-6 text-xs">
+              <div>
+                <label className="block text-gray-500 mb-1">총 단계</label>
+                <input type="number" value={maxLevel} onChange={(e) => setMaxLevel(Number(e.target.value))} className="w-full border p-1 rounded" />
+              </div>
+              <div>
+                <label className="block text-gray-500 mb-1">최대 등장 단계</label>
+                <input type="number" value={spawnMaxLevel} onChange={(e) => setSpawnMaxLevel(Number(e.target.value))} className="w-full border p-1 rounded font-bold text-indigo-600" />
+              </div>
+              <div>
+                <label className="block text-gray-500 mb-1">발사 횟수</label>
+                <input type="number" value={totalShots} onChange={(e) => setTotalShots(Number(e.target.value))} className="w-full border p-1 rounded" />
+              </div>
+              <div>
+                <label className="block text-gray-500 mb-1">👑 수박 점수</label>
+                <input type="number" value={watermelonScore} onChange={(e) => setWatermelonScore(Number(e.target.value))} className="w-full border p-1 rounded" />
+              </div>
+            </div>
 
-              return (
-                <div key={index} className="relative group">
-                  {index > 0 && (
-                    <div className="flex justify-center -my-2 relative z-0 opacity-30"><span className="text-gray-400 text-lg">↓</span></div>
-                  )}
+            <p className="text-[10px] text-gray-400 text-center mb-4 bg-gray-50 p-2 rounded">
+              * 적용하기를 누르면 확률이 유지된 채 과일 크기순 정렬됩니다.
+            </p>
 
-                  <div className={`relative z-10 flex flex-col gap-2 p-3 rounded-xl border transition-all duration-200 ${isLast ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800/50 shadow-md scale-[1.02]' : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-gray-600'} ${isSpawnable ? 'ring-1 ring-blue-100 dark:ring-blue-900/30' : ''}`}>
+            {/* 과일 데이터 그리드 */}
+            <div className="space-y-2">
+              <div className="grid grid-cols-12 gap-1 text-[10px] text-gray-500 font-bold text-center mb-2">
+                <div className="col-span-1">Lv</div>
+                <div className="col-span-2">Image</div>
+                <div className="col-span-3">Name</div> 
+                <div className="col-span-2">Radius</div>
+                <div className="col-span-2">Color</div>
+                <div className="col-span-2">Prob</div>
+              </div>
+
+              {tempFruits.map((fruit, index) => {
+                const isSpawnable = fruit.id <= spawnMaxLevel;
+
+                return (
+                  <div key={fruit.id} className={`grid grid-cols-12 gap-1 items-center p-1 rounded border ${isSpawnable ? 'bg-white' : 'bg-gray-100 opacity-60'}`}>
+                    <div className="col-span-1 text-center font-bold text-xs text-gray-600">{fruit.id}</div>
                     
-                    <div className="flex items-center gap-3">
-                      <div className="flex flex-col items-center gap-1 min-w-[32px]">
-                        <div className={`w-6 h-6 flex items-center justify-center text-white text-[9px] font-bold rounded-full shadow ${isLast ? 'bg-green-500' : 'bg-gray-400 dark:bg-gray-600'}`}>
-                          {isLast ? 'MAX' : index + 1}
-                        </div>
-                        <div className="rounded-full border border-black/5 shadow-sm" style={{ width: '24px', height: '24px', backgroundColor: fruit.color }} />
-                      </div>
-
-                      <div className="flex-1">
-                         <select 
-                          value={fruit.poolId}
-                          onChange={(e) => handleBaseFruitChange(index, Number(e.target.value))}
-                          disabled={isLast}
-                          className={`w-full text-sm p-1 border-none rounded bg-transparent font-bold focus:ring-0 ${isLast ? 'text-green-700 dark:text-green-400 cursor-not-allowed appearance-none' : 'text-gray-700 dark:text-gray-200 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-                        >
-                          {FRUIT_POOL.map((p) => (
-                            <option key={p.id} value={p.id}>{p.name} (Std: {p.defaultRadius}px)</option>
-                          ))}
-                        </select>
-                      </div>
-                      
-                      {isSpawnable && !isLast && (
-                        <div className="flex items-center bg-blue-50 dark:bg-blue-900/40 rounded px-1.5 py-0.5 border border-blue-100 dark:border-blue-800">
-                          <span className="text-[9px] text-blue-600 dark:text-blue-300 font-bold mr-1">prob</span>
-                          <input 
-                            type="number"
-                            value={fruit.probability || 0} 
-                            onChange={(e) => handleProbabilityChange(index, Number(e.target.value))}
-                            className="w-8 bg-transparent text-[10px] font-bold text-blue-700 dark:text-blue-200 text-right outline-none"
-                          />
-                          <span className="text-[8px] text-blue-400 ml-0.5">‰</span>
-                        </div>
-                      )}
+                    <div className="col-span-2 flex justify-center">
+                       {fruit.img ? <img src={fruit.img} className="w-6 h-6 object-contain" /> : <div className="w-4 h-4 rounded-full" style={{backgroundColor: fruit.color}}/>}
                     </div>
 
-                    <div className="grid grid-cols-4 gap-2 pl-10">
-                      <div className="col-span-2">
-                        <input 
-                           type="text" 
-                           value={fruit.name}
-                           onChange={(e) => handlePropertyChange(index, 'name', e.target.value)}
-                           disabled={isLast}
-                           className="w-full text-[11px] p-1 border rounded bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 text-center"
-                           placeholder="이름"
-                        />
-                      </div>
-                      <div className="col-span-1 relative">
-                        <input 
-                           type="number" 
-                           value={fruit.radius}
-                           onChange={(e) => handlePropertyChange(index, 'radius', Number(e.target.value))}
-                           disabled={isLast}
-                           className="w-full text-[11px] p-1 border rounded bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 text-center pr-4"
-                        />
-                        <span className="absolute right-1 top-1.5 text-[8px] text-gray-400">px</span>
-                      </div>
-                      <div className="col-span-1">
-                        <input 
-                           type="color" 
-                           value={fruit.color}
-                           onChange={(e) => handlePropertyChange(index, 'color', e.target.value)}
-                           disabled={isLast}
-                           className="w-full h-full p-0 border rounded overflow-hidden cursor-pointer"
-                        />
-                      </div>
+                    <div className="col-span-3 text-center text-[10px] text-gray-700 truncate px-1">
+                      {fruit.name}
                     </div>
 
-                    {isLast && <div className="text-[9px] text-green-600 dark:text-green-400 font-bold text-center mt-1">🔒 최종 목표는 수박으로 고정됩니다</div>}
+                    <div className="col-span-2">
+                       <input 
+                         type="number" 
+                         value={Math.round(fruit.radius)} 
+                         onChange={(e) => handleTempChange(index, 'radius', Number(e.target.value))}
+                         className="w-full text-center text-xs border rounded p-1"
+                       />
+                    </div>
+
+                    <div className="col-span-2">
+                       <input 
+                         type="color" 
+                         value={fruit.color} 
+                         onChange={(e) => handleTempChange(index, 'color', e.target.value)}
+                         className="w-full h-6 border rounded overflow-hidden p-0"
+                       />
+                    </div>
+
+                    <div className="col-span-2 relative">
+                       <input 
+                         type="number" 
+                         value={fruit.probability} 
+                         onChange={(e) => handleTempChange(index, 'probability', Number(e.target.value))}
+                         disabled={!isSpawnable}
+                         className={`w-full text-center text-xs border rounded p-1 ${isSpawnable ? 'text-indigo-600 font-bold' : 'text-gray-300'}`}
+                       />
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+
           </div>
         </div>
       </div>
