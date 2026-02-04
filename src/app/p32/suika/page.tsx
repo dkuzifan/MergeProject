@@ -8,14 +8,15 @@ import { useState, useRef, useEffect, useCallback } from "react";
 // 1. 마스터 데이터 및 타입 정의
 // ----------------------------------------------------------------------
 
-// [수정] 해상도 369 * 800 (9:19.5 비율 유지)
-const CANVAS_WIDTH = 369;
-const CANVAS_HEIGHT = 800;
-// [수정] 과일 크기 비율 조정 (800 / 1560)
-const SCALE_RATIO = 0.5128; 
+// 캔버스 크기 (가로 358, 세로 475 - 1:1.3 비율)
+const CANVAS_WIDTH = 358;
+const CANVAS_HEIGHT = 475;
+
+// 과일 크기 비율 (너비 358 기준: 358 / 720 = 0.4972)
+const SCALE_RATIO = 0.4972;
 
 const WALL_THICKNESS = 10;
-const SPAWN_Y = 50;
+const SPAWN_Y = 25;
 
 // [타입 정의] Matter.js Body
 interface IMatterBody {
@@ -159,6 +160,7 @@ export default function SuikaPage() {
 
   // --- Logic ---
   const pickNextFruitId = useCallback(() => {
+    // 2. 확률 로직 검증: 확률의 합이 100이 아니더라도 전체 가중치(totalProb) 대비 비율로 계산되므로 안전함.
     const candidates = fruitsRef.current.filter(f => f.id <= spawnMaxLevel);
     const totalProb = candidates.reduce((sum, f) => sum + f.probability, 0);
     if (totalProb === 0) return 1;
@@ -324,9 +326,7 @@ export default function SuikaPage() {
           if (sensor && fruit) {
              // 갓 생성된 과일 제외 & 속도가 멈춤에 가까울 때 (안정화)
              if (!fruit.isNewSpawn && (fruit.speed || 0) < 0.1) {
-                
-                // [수정] 게임오버 조건: 과일의 중심(Y)이 경고선(Y)보다 위에 있을 때 (값이 더 작을 때)
-                // 즉, 과일의 50% 이상이 선을 넘어갔을 때
+                // 게임오버 조건: 과일의 중심(Y)이 경고선(Y)보다 위에 있을 때
                 if (fruit.position.y < sensor.position.y) {
                     dangerDetected = true;
                     shouldGameOver = true;
@@ -472,6 +472,7 @@ export default function SuikaPage() {
     }
   };
 
+  // --- UI Helpers ---
   const handleTempChange = (index: number, key: keyof FruitDef, value: string | number) => {
     setTempFruits(prev => {
       const next = [...prev];
@@ -480,15 +481,51 @@ export default function SuikaPage() {
     });
   };
 
+  // 1. [기능 추가] 확률 자동 정규화 (100% 맞춤)
+  const normalizeProbabilities = () => {
+    const candidates = tempFruits.filter(f => f.id <= spawnMaxLevel);
+    const currentSum = candidates.reduce((sum, f) => sum + f.probability, 0);
+    
+    if (currentSum === 0) return; // 0으로 나누기 방지
+
+    const newFruits = [...tempFruits];
+    let newSum = 0;
+
+    candidates.forEach((f, idx) => {
+       // 실제 인덱스 찾기
+       const realIndex = newFruits.findIndex(item => item.id === f.id);
+       if (realIndex === -1) return;
+
+       // 비율 계산 (소수점 1자리까지)
+       let newProb = Math.round((f.probability / currentSum) * 1000) / 10;
+       
+       // 마지막 아이템에서 오차 보정 (단순화를 위해 마지막 요소에 나머지 몰아주기)
+       if (idx === candidates.length - 1) {
+           newProb = Number((100 - newSum).toFixed(1));
+       } else {
+           newSum += newProb;
+       }
+       
+       newFruits[realIndex].probability = newProb;
+    });
+
+    setTempFruits(newFruits);
+  };
+
   const applySettings = () => {
     setFruits(tempFruits);
     alert("설정이 적용되었습니다!");
   };
 
+  // 현재 확률 합계 계산
+  const currentTotalProb = tempFruits
+    .filter(f => f.id <= spawnMaxLevel)
+    .reduce((sum, f) => sum + f.probability, 0);
+
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 py-8 px-4 font-sans select-none touch-none">
 
-      <div className="max-w-6xl mx-auto flex justify-between items-center mb-6 bg-white p-4 rounded-xl shadow-sm">
+      <div className="max-w-7xl mx-auto flex justify-between items-center mb-6 bg-white p-4 rounded-xl shadow-sm">
         <h1 className="text-xl font-bold text-gray-800">🍉 수박게임 시뮬레이터</h1>
         <div className="flex gap-6 text-sm text-gray-700">
           <div>Total Plays: <span className="font-bold text-gray-900">{totalPlay}</span></div>
@@ -497,10 +534,10 @@ export default function SuikaPage() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-        {/* --- 왼쪽: 시뮬레이션 영역 --- */}
-        <div className="col-span-1 lg:col-span-2 flex flex-col items-center">
+        {/* --- 왼쪽: 시뮬레이션 영역 (절반 차지) --- */}
+        <div className="col-span-1 flex flex-col items-center">
           <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg w-fit relative">
 
             {gameState === "READY" && (
@@ -605,6 +642,7 @@ export default function SuikaPage() {
           </div>
         </div>
 
+        {/* --- 오른쪽: 룰 & 설정 (절반 차지) --- */}
         <div className="col-span-1">
           <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg h-full max-h-[850px] overflow-y-auto">
 
@@ -646,28 +684,39 @@ export default function SuikaPage() {
             </p>
 
             <div className="space-y-2">
-              <div className="grid grid-cols-12 gap-1 text-[10px] text-gray-500 font-bold text-center mb-2">
-                <div className="col-span-1">Lv</div>
-                <div className="col-span-2">Name</div>
-                <div className="col-span-2">Radius</div>
-                <div className="col-span-2">Elas.</div>
-                <div className="col-span-2">Fric.</div>
-                <div className="col-span-2">Mass</div>
-                <div className="col-span-1">Prob</div>
+              <div className="grid gap-1 text-[10px] text-gray-500 font-bold text-center mb-2" style={{ gridTemplateColumns: "1fr 2fr 2fr 2fr 2fr 2fr 2fr" }}>
+                <div>단계</div>
+                <div>이름</div>
+                <div>크기</div>
+                <div>탄성</div>
+                <div>마찰</div>
+                <div>밀도</div>
+                <div className="flex flex-col items-center justify-center">
+                    <span>확률</span>
+                    {/* [기능 추가] 100% 자동 맞춤 버튼 */}
+                    <button 
+                        onClick={normalizeProbabilities}
+                        className="text-[8px] bg-indigo-100 text-indigo-700 px-1 rounded hover:bg-indigo-200 mt-1"
+                    >
+                        100% 맞춤
+                    </button>
+                </div>
               </div>
 
               {tempFruits.map((fruit, index) => {
                 const isSpawnable = fruit.id <= spawnMaxLevel;
 
                 return (
-                  <div key={fruit.id} className={`grid grid-cols-12 gap-1 items-center p-1 rounded border ${isSpawnable ? 'bg-white' : 'bg-gray-100 opacity-60'}`}>
-                    <div className="col-span-1 text-center font-bold text-xs text-gray-600">{fruit.id}</div>
+                  <div key={fruit.id} className={`grid gap-1 items-center p-1 rounded border ${isSpawnable ? 'bg-white' : 'bg-gray-100 opacity-60'}`}
+                       style={{ gridTemplateColumns: "1fr 2fr 2fr 2fr 2fr 2fr 2fr" }}>
+                    
+                    <div className="text-center font-bold text-xs text-gray-600">{fruit.id}</div>
 
-                    <div className="col-span-2 text-center text-[9px] text-gray-700 truncate px-1">
+                    <div className="text-center text-[9px] text-gray-700 truncate px-1">
                       {fruit.name}
                     </div>
 
-                    <div className="col-span-2">
+                    <div>
                       <input
                         type="number"
                         value={Math.round(fruit.radius)}
@@ -676,7 +725,7 @@ export default function SuikaPage() {
                       />
                     </div>
 
-                    <div className="col-span-2">
+                    <div>
                        <input 
                          type="number" step="0.1"
                          value={fruit.restitution} 
@@ -684,7 +733,7 @@ export default function SuikaPage() {
                          className="w-full text-center text-[10px] border rounded p-1 bg-blue-50"
                        />
                     </div>
-                    <div className="col-span-2">
+                    <div>
                        <input 
                          type="number" step="0.01"
                          value={fruit.friction} 
@@ -692,7 +741,7 @@ export default function SuikaPage() {
                          className="w-full text-center text-[10px] border rounded p-1 bg-green-50"
                        />
                     </div>
-                    <div className="col-span-2">
+                    <div>
                        <input 
                          type="number" step="0.001"
                          value={fruit.density} 
@@ -701,7 +750,7 @@ export default function SuikaPage() {
                        />
                     </div>
 
-                    <div className="col-span-1 relative">
+                    <div className="relative">
                       <input
                         type="number"
                         value={fruit.probability}
@@ -713,6 +762,15 @@ export default function SuikaPage() {
                   </div>
                 );
               })}
+              
+              {/* [UI 추가] 확률 합계 표시 */}
+              <div className="grid gap-1 mt-2 pt-2 border-t" style={{ gridTemplateColumns: "1fr 10fr 2fr" }}>
+                  <div />
+                  <div className="text-right text-xs font-bold text-gray-600 pr-2">Total Prob:</div>
+                  <div className={`text-center text-xs font-bold ${Math.abs(currentTotalProb - 100) < 0.1 ? 'text-green-600' : 'text-red-500'}`}>
+                      {currentTotalProb.toFixed(1)}%
+                  </div>
+              </div>
             </div>
 
           </div>
