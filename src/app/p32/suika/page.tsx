@@ -16,7 +16,8 @@ const CANVAS_HEIGHT = 475;
 const SCALE_RATIO = 0.4972;
 
 const WALL_THICKNESS = 10;
-const SPAWN_Y = 25;
+// [수정] 경고선과 겹치지 않게 생성 위치 상향 조정 (50 -> 30)
+const SPAWN_Y = 30;
 
 // [타입 정의] Matter.js Body
 interface IMatterBody {
@@ -160,7 +161,6 @@ export default function SuikaPage() {
 
   // --- Logic ---
   const pickNextFruitId = useCallback(() => {
-    // 2. 확률 로직 검증: 확률의 합이 100이 아니더라도 전체 가중치(totalProb) 대비 비율로 계산되므로 안전함.
     const candidates = fruitsRef.current.filter(f => f.id <= spawnMaxLevel);
     const totalProb = candidates.reduce((sum, f) => sum + f.probability, 0);
     if (totalProb === 0) return 1;
@@ -324,9 +324,7 @@ export default function SuikaPage() {
           const fruit = sensor === bodyA ? bodyB : (sensor === bodyB ? bodyA : null);
 
           if (sensor && fruit) {
-             // 갓 생성된 과일 제외 & 속도가 멈춤에 가까울 때 (안정화)
              if (!fruit.isNewSpawn && (fruit.speed || 0) < 0.1) {
-                // 게임오버 조건: 과일의 중심(Y)이 경고선(Y)보다 위에 있을 때
                 if (fruit.position.y < sensor.position.y) {
                     dangerDetected = true;
                     shouldGameOver = true;
@@ -472,7 +470,6 @@ export default function SuikaPage() {
     }
   };
 
-  // --- UI Helpers ---
   const handleTempChange = (index: number, key: keyof FruitDef, value: string | number) => {
     setTempFruits(prev => {
       const next = [...prev];
@@ -481,25 +478,21 @@ export default function SuikaPage() {
     });
   };
 
-  // 1. [기능 추가] 확률 자동 정규화 (100% 맞춤)
   const normalizeProbabilities = () => {
     const candidates = tempFruits.filter(f => f.id <= spawnMaxLevel);
     const currentSum = candidates.reduce((sum, f) => sum + f.probability, 0);
     
-    if (currentSum === 0) return; // 0으로 나누기 방지
+    if (currentSum === 0) return; 
 
     const newFruits = [...tempFruits];
     let newSum = 0;
 
     candidates.forEach((f, idx) => {
-       // 실제 인덱스 찾기
        const realIndex = newFruits.findIndex(item => item.id === f.id);
        if (realIndex === -1) return;
 
-       // 비율 계산 (소수점 1자리까지)
        let newProb = Math.round((f.probability / currentSum) * 1000) / 10;
        
-       // 마지막 아이템에서 오차 보정 (단순화를 위해 마지막 요소에 나머지 몰아주기)
        if (idx === candidates.length - 1) {
            newProb = Number((100 - newSum).toFixed(1));
        } else {
@@ -517,7 +510,6 @@ export default function SuikaPage() {
     alert("설정이 적용되었습니다!");
   };
 
-  // 현재 확률 합계 계산
   const currentTotalProb = tempFruits
     .filter(f => f.id <= spawnMaxLevel)
     .reduce((sum, f) => sum + f.probability, 0);
@@ -536,7 +528,6 @@ export default function SuikaPage() {
 
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-        {/* --- 왼쪽: 시뮬레이션 영역 (절반 차지) --- */}
         <div className="col-span-1 flex flex-col items-center">
           <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg w-fit relative">
 
@@ -642,7 +633,6 @@ export default function SuikaPage() {
           </div>
         </div>
 
-        {/* --- 오른쪽: 룰 & 설정 (절반 차지) --- */}
         <div className="col-span-1">
           <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg h-full max-h-[850px] overflow-y-auto">
 
@@ -693,7 +683,6 @@ export default function SuikaPage() {
                 <div>밀도</div>
                 <div className="flex flex-col items-center justify-center">
                     <span>확률</span>
-                    {/* [기능 추가] 100% 자동 맞춤 버튼 */}
                     <button 
                         onClick={normalizeProbabilities}
                         className="text-[8px] bg-indigo-100 text-indigo-700 px-1 rounded hover:bg-indigo-200 mt-1"
@@ -721,7 +710,7 @@ export default function SuikaPage() {
                         type="number"
                         value={Math.round(fruit.radius)}
                         onChange={(e) => handleTempChange(index, 'radius', Number(e.target.value))}
-                        className="w-full text-center text-[10px] border rounded p-1"
+                        className="w-full text-center text-[10px] border rounded p-1 dark:bg-gray-700 dark:text-white dark:border-gray-600"
                       />
                     </div>
 
@@ -730,7 +719,7 @@ export default function SuikaPage() {
                          type="number" step="0.1"
                          value={fruit.restitution} 
                          onChange={(e) => handleTempChange(index, 'restitution', Number(e.target.value))}
-                         className="w-full text-center text-[10px] border rounded p-1 bg-blue-50"
+                         className="w-full text-center text-[10px] border rounded p-1 bg-blue-50 dark:bg-blue-900 dark:text-blue-100 dark:border-blue-700"
                        />
                     </div>
                     <div>
@@ -738,7 +727,7 @@ export default function SuikaPage() {
                          type="number" step="0.01"
                          value={fruit.friction} 
                          onChange={(e) => handleTempChange(index, 'friction', Number(e.target.value))}
-                         className="w-full text-center text-[10px] border rounded p-1 bg-green-50"
+                         className="w-full text-center text-[10px] border rounded p-1 bg-green-50 dark:bg-green-900 dark:text-green-100 dark:border-green-700"
                        />
                     </div>
                     <div>
@@ -746,7 +735,7 @@ export default function SuikaPage() {
                          type="number" step="0.001"
                          value={fruit.density} 
                          onChange={(e) => handleTempChange(index, 'density', Number(e.target.value))}
-                         className="w-full text-center text-[10px] border rounded p-1 bg-orange-50"
+                         className="w-full text-center text-[10px] border rounded p-1 bg-orange-50 dark:bg-orange-900 dark:text-orange-100 dark:border-orange-700"
                        />
                     </div>
 
@@ -756,14 +745,13 @@ export default function SuikaPage() {
                         value={fruit.probability}
                         onChange={(e) => handleTempChange(index, 'probability', Number(e.target.value))}
                         disabled={!isSpawnable}
-                        className={`w-full text-center text-[10px] border rounded p-1 ${isSpawnable ? 'text-indigo-600 font-bold' : 'text-gray-300'}`}
+                        className={`w-full text-center text-[10px] border rounded p-1 ${isSpawnable ? 'text-indigo-600 dark:text-indigo-300 font-bold' : 'text-gray-300 dark:text-gray-600'} dark:bg-gray-700 dark:border-gray-600`}
                       />
                     </div>
                   </div>
                 );
               })}
               
-              {/* [UI 추가] 확률 합계 표시 */}
               <div className="grid gap-1 mt-2 pt-2 border-t" style={{ gridTemplateColumns: "1fr 10fr 2fr" }}>
                   <div />
                   <div className="text-right text-xs font-bold text-gray-600 pr-2">Total Prob:</div>
