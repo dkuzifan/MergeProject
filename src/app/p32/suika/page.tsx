@@ -16,7 +16,6 @@ const CANVAS_HEIGHT = 475;
 const SCALE_RATIO = 0.4972;
 
 const WALL_THICKNESS = 10;
-// [수정] 경고선과 겹치지 않게 생성 위치 상향 조정 (50 -> 30)
 const SPAWN_Y = 30;
 
 // [타입 정의] Matter.js Body
@@ -61,23 +60,25 @@ type FruitDef = {
   restitution: number;
   friction: number;
   density: number;
+  // [추가] 획득 점수
+  score: number;
 };
 
 const INITIAL_FRUITS: FruitDef[] = [
-  // [설정] 작은 과일은 잘 튀고(0.5), 큰 과일은 묵직하게(0.1)
-  { id: 1, name: "라즈베리", radius: (48 / 2) * SCALE_RATIO, color: "#E63E85", probability: 20, img: "/images/suika/fruit_00_raspberry.svg", originalWidth: 48, originalHeight: 48, restitution: 0.5, friction: 0.01, density: 0.001 },
-  { id: 2, name: "블루베리", radius: (68 / 2) * SCALE_RATIO, color: "#5B43D8", probability: 20, img: "/images/suika/fruit_01_blueberry.svg", originalWidth: 68, originalHeight: 68, restitution: 0.5, friction: 0.01, density: 0.001 },
-  { id: 3, name: "라임", radius: (95 / 2) * SCALE_RATIO, color: "#8AC249", probability: 15, img: "/images/suika/fruit_02_lime.svg", originalWidth: 95, originalHeight: 95, restitution: 0.45, friction: 0.01, density: 0.001 },
-  { id: 4, name: "망고스틴", radius: (124 / 2) * SCALE_RATIO, color: "#6D214F", probability: 15, img: "/images/suika/fruit_03_mangosteen.svg", originalWidth: 124, originalHeight: 124, restitution: 0.4, friction: 0.01, density: 0.001 },
-  { id: 5, name: "용과", radius: (152 / 2) * SCALE_RATIO, color: "#E63E85", probability: 15, img: "/images/suika/fruit_04_dragonfruit.svg", originalWidth: 152, originalHeight: 168, restitution: 0.35, friction: 0.02, density: 0.0015 },
-  { id: 6, name: "파파야", radius: (180 / 2) * SCALE_RATIO, color: "#FF9F1C", probability: 10, img: "/images/suika/fruit_05_papaya.svg", originalWidth: 180, originalHeight: 190, restitution: 0.3, friction: 0.02, density: 0.0015 },
-  { id: 7, name: "망고", radius: (208 / 2) * SCALE_RATIO, color: "#FF6B00", probability: 5, img: "/images/suika/fruit_06_mango.svg", originalWidth: 208, originalHeight: 196, restitution: 0.25, friction: 0.03, density: 0.002 },
-  { id: 8, name: "파인애플", radius: (222 / 2) * SCALE_RATIO, color: "#FFB300", probability: 0, img: "/images/suika/fruit_07_pineapple.svg", originalWidth: 222, originalHeight: 282, restitution: 0.2, friction: 0.03, density: 0.002 },
-  { id: 9, name: "두리안", radius: (295 / 2) * SCALE_RATIO, color: "#FCEBB6", probability: 0, img: "/images/suika/fruit_08_durian.svg", originalWidth: 295, originalHeight: 295, restitution: 0.2, friction: 0.05, density: 0.0025 },
-  { id: 10, name: "코코넛", radius: (358 / 2) * SCALE_RATIO, color: "#F0EFE7", probability: 0, img: "/images/suika/fruit_09_coconut.svg", originalWidth: 358, originalHeight: 358, restitution: 0.1, friction: 0.1, density: 0.003 },
-  { id: 11, name: "수박", radius: (460 / 2) * SCALE_RATIO, color: "#4CAF50", probability: 0, img: "/images/suika/fruit_10_watermelon.svg", originalWidth: 460, originalHeight: 460, restitution: 0.1, friction: 0.1, density: 0.003 },
+  // [설정] 점수(score) 속성 추가 (10점 단위 예시)
+  { id: 1, name: "라즈베리", radius: (48 / 2) * SCALE_RATIO, color: "#E63E85", probability: 20, img: "/images/suika/fruit_00_raspberry.svg", originalWidth: 48, originalHeight: 48, restitution: 0.5, friction: 0.01, density: 0.001, score: 10 },
+  { id: 2, name: "블루베리", radius: (68 / 2) * SCALE_RATIO, color: "#5B43D8", probability: 20, img: "/images/suika/fruit_01_blueberry.svg", originalWidth: 68, originalHeight: 68, restitution: 0.5, friction: 0.01, density: 0.001, score: 20 },
+  { id: 3, name: "라임", radius: (95 / 2) * SCALE_RATIO, color: "#8AC249", probability: 15, img: "/images/suika/fruit_02_lime.svg", originalWidth: 95, originalHeight: 95, restitution: 0.45, friction: 0.01, density: 0.001, score: 30 },
+  { id: 4, name: "망고스틴", radius: (124 / 2) * SCALE_RATIO, color: "#6D214F", probability: 15, img: "/images/suika/fruit_03_mangosteen.svg", originalWidth: 124, originalHeight: 124, restitution: 0.4, friction: 0.01, density: 0.001, score: 40 },
+  { id: 5, name: "용과", radius: (152 / 2) * SCALE_RATIO, color: "#E63E85", probability: 15, img: "/images/suika/fruit_04_dragonfruit.svg", originalWidth: 152, originalHeight: 168, restitution: 0.35, friction: 0.02, density: 0.0015, score: 50 },
+  { id: 6, name: "파파야", radius: (180 / 2) * SCALE_RATIO, color: "#FF9F1C", probability: 10, img: "/images/suika/fruit_05_papaya.svg", originalWidth: 180, originalHeight: 190, restitution: 0.3, friction: 0.02, density: 0.0015, score: 60 },
+  { id: 7, name: "망고", radius: (208 / 2) * SCALE_RATIO, color: "#FF6B00", probability: 5, img: "/images/suika/fruit_06_mango.svg", originalWidth: 208, originalHeight: 196, restitution: 0.25, friction: 0.03, density: 0.002, score: 70 },
+  { id: 8, name: "파인애플", radius: (222 / 2) * SCALE_RATIO, color: "#FFB300", probability: 0, img: "/images/suika/fruit_07_pineapple.svg", originalWidth: 222, originalHeight: 282, restitution: 0.2, friction: 0.03, density: 0.002, score: 80 },
+  { id: 9, name: "두리안", radius: (295 / 2) * SCALE_RATIO, color: "#FCEBB6", probability: 0, img: "/images/suika/fruit_08_durian.svg", originalWidth: 295, originalHeight: 295, restitution: 0.2, friction: 0.05, density: 0.0025, score: 90 },
+  { id: 10, name: "코코넛", radius: (358 / 2) * SCALE_RATIO, color: "#F0EFE7", probability: 0, img: "/images/suika/fruit_09_coconut.svg", originalWidth: 358, originalHeight: 358, restitution: 0.1, friction: 0.1, density: 0.003, score: 100 },
+  { id: 11, name: "수박", radius: (460 / 2) * SCALE_RATIO, color: "#4CAF50", probability: 0, img: "/images/suika/fruit_10_watermelon.svg", originalWidth: 460, originalHeight: 460, restitution: 0.1, friction: 0.1, density: 0.003, score: 1000 },
   ...Array.from({ length: 9 }).map((_, i) => ({
-    id: 12 + i, name: `과일 ${12 + i}`, radius: 120 + i * 5, color: "#94a3b8", probability: 0, restitution: 0.2, friction: 0.1, density: 0.001
+    id: 12 + i, name: `과일 ${12 + i}`, radius: 120 + i * 5, color: "#94a3b8", probability: 0, restitution: 0.2, friction: 0.1, density: 0.001, score: 0
   }))
 ];
 
@@ -99,7 +100,7 @@ export default function SuikaPage() {
   const [spawnMaxLevel, setSpawnMaxLevel] = useState(5);
   const [totalShots, setTotalShots] = useState(50);
   const [currentShots, setCurrentShots] = useState(50);
-  const [watermelonScore, setWatermelonScore] = useState(100);
+  // [삭제] watermelonScore 제거
   const [deadLinePercent, setDeadLinePercent] = useState(20);
 
   // Score & Records
@@ -125,7 +126,6 @@ export default function SuikaPage() {
   const queueRef = useRef<number[]>([]);
   const gameStateRef = useRef<GameState>("READY");
   const shotsRef = useRef(currentShots);
-  const watermelonScoreRef = useRef(watermelonScore);
   const deadLinePercentRef = useRef(deadLinePercent);
   const scoreRef = useRef(score);
   const isDangerRef = useRef(isDanger);
@@ -135,7 +135,6 @@ export default function SuikaPage() {
   useEffect(() => { queueRef.current = nextQueue; }, [nextQueue]);
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
   useEffect(() => { shotsRef.current = currentShots; }, [currentShots]);
-  useEffect(() => { watermelonScoreRef.current = watermelonScore; }, [watermelonScore]);
   useEffect(() => { scoreRef.current = score; }, [score]);
   useEffect(() => { isDangerRef.current = isDanger; }, [isDanger]);
 
@@ -366,13 +365,15 @@ export default function SuikaPage() {
                 
                 World.remove(engine.world, [bodyA, bodyB]);
                 
+                // [점수 로직 수정] 합쳐져서 나온 과일의 점수만큼 추가
+                setScore(prev => prev + nextDef.score);
+
                 if (nextId === 11) {
-                    setScore(prev => prev + watermelonScoreRef.current);
                     setWatermelonsCount(p => p + 1);
                     
                     setGameState("GAMEOVER");
                     setEndReason("CLEAR");
-                    setTotalScore(s => s + scoreRef.current + watermelonScoreRef.current);
+                    setTotalScore(s => s + scoreRef.current + nextDef.score); // 반영된 점수 포함
                     return;
                 }
 
@@ -659,10 +660,7 @@ export default function SuikaPage() {
                 <label className="block text-gray-500 mb-1">발사 횟수</label>
                 <input type="number" value={totalShots} onChange={(e) => setTotalShots(Number(e.target.value))} className="w-full border p-1 rounded" />
               </div>
-              <div>
-                <label className="block text-gray-500 mb-1">👑 수박 점수</label>
-                <input type="number" value={watermelonScore} onChange={(e) => setWatermelonScore(Number(e.target.value))} className="w-full border p-1 rounded" />
-              </div>
+              {/* [삭제] 수박 점수 입력란 제거 */}
               <div>
                 <label className="block text-gray-500 mb-1">경고 선 (%)</label>
                 <input type="number" value={deadLinePercent} onChange={(e) => setDeadLinePercent(Number(e.target.value))} className="w-full border p-1 rounded text-red-500 font-bold" />
@@ -674,13 +672,16 @@ export default function SuikaPage() {
             </p>
 
             <div className="space-y-2">
-              <div className="grid gap-1 text-[10px] text-gray-500 font-bold text-center mb-2" style={{ gridTemplateColumns: "1fr 2fr 2fr 2fr 2fr 2fr 2fr" }}>
+              {/* [수정] 8분할 그리드 (점수 컬럼 추가) */}
+              <div className="grid gap-1 text-[10px] text-gray-500 font-bold text-center mb-2" 
+                   style={{ gridTemplateColumns: "0.8fr 2fr 1.5fr 1.5fr 1.5fr 1.5fr 1.5fr 2fr" }}>
                 <div>단계</div>
                 <div>이름</div>
                 <div>크기</div>
                 <div>탄성</div>
                 <div>마찰</div>
-                <div>밀도</div>
+                <div>질량</div>
+                <div>점수</div> {/* [추가] */}
                 <div className="flex flex-col items-center justify-center">
                     <span>확률</span>
                     <button 
@@ -696,8 +697,9 @@ export default function SuikaPage() {
                 const isSpawnable = fruit.id <= spawnMaxLevel;
 
                 return (
+                  // [수정] 8분할 그리드
                   <div key={fruit.id} className={`grid gap-1 items-center p-1 rounded border ${isSpawnable ? 'bg-white' : 'bg-gray-100 opacity-60'}`}
-                       style={{ gridTemplateColumns: "1fr 2fr 2fr 2fr 2fr 2fr 2fr" }}>
+                       style={{ gridTemplateColumns: "0.8fr 2fr 1.5fr 1.5fr 1.5fr 1.5fr 1.5fr 2fr" }}>
                     
                     <div className="text-center font-bold text-xs text-gray-600">{fruit.id}</div>
 
@@ -736,6 +738,15 @@ export default function SuikaPage() {
                          value={fruit.density} 
                          onChange={(e) => handleTempChange(index, 'density', Number(e.target.value))}
                          className="w-full text-center text-[10px] border rounded p-1 bg-orange-50 dark:bg-orange-900 dark:text-orange-100 dark:border-orange-700"
+                       />
+                    </div>
+                    {/* [추가] 점수 입력란 */}
+                    <div>
+                       <input 
+                         type="number"
+                         value={fruit.score} 
+                         onChange={(e) => handleTempChange(index, 'score', Number(e.target.value))}
+                         className="w-full text-center text-[10px] border rounded p-1 bg-yellow-50 dark:bg-yellow-900 dark:text-yellow-100 dark:border-yellow-700"
                        />
                     </div>
 
