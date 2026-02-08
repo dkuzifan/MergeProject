@@ -10,7 +10,8 @@
       "Bash(npm run dev:*)",
       "Bash(git restore:*)",
       "Bash(claude mcp add:*)",
-      "Bash(npx ctx7:*)"
+      "Bash(npx ctx7:*)",
+      "Bash(npx kill-port:*)"
     ]
   }
 }
