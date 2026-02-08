@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(claude install:*)",
+      "Bash(dir /b \"E:\\\\Project\\\\MergeProject\\\\src\\\\app\")",
+      "Bash(git add:*)"
+    ]
+  }
+}

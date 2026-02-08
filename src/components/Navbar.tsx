@@ -1,4 +1,5 @@
-// src/components/Navbar.tsx
+"use client";
+
 import Link from "next/link";
 import ThemeToggle from "./ThemeToggle";
 
@@ -19,17 +20,13 @@ export default function Navbar() {
         </Link>
         
         {/* 2. 좌측 메뉴 (드롭다운) */}
-        <div className="flex items-center space-x-40">
+        <div className="flex items-center space-x-20"> {/* 간격 조절 (space-x-40 -> 20) 메뉴가 많아져서 조금 좁혔습니다 */}
           
-          {/* === P32 드롭다운 메뉴 === */}
+          {/* === P32 드롭다운 === */}
           <div className="relative group py-4">
             <Link href="/p32" className="relative z-10 text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 font-bold text-xl transition duration-300">
               P32
             </Link>
-            
-            {/* 드롭다운 패널 */}
-            {/* [수정 포인트] mt-2(마진)를 삭제하고 pt-4(패딩)를 추가했습니다. */}
-            {/* 이제 텍스트와 박스 사이의 빈 공간도 '클릭 가능한 영역'으로 인식됩니다. */}
             <div className="absolute top-full left-0 pt-4 w-48 hidden group-hover:block animation-fade-in">
               <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border border-white/40 dark:border-gray-700/50 rounded-2xl shadow-2xl overflow-hidden ring-1 ring-black/5">
                 <div className="p-2 space-y-1">
@@ -44,20 +41,35 @@ export default function Navbar() {
             </div>
           </div>
 
-          {/* === P40 드롭다운 메뉴 === */}
+          {/* === P40 드롭다운 === */}
           <div className="relative group py-4">
             <Link href="/p40" className="relative z-10 text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 font-bold text-xl transition duration-300">
               P40
             </Link>
-
-            {/* 드롭다운 패널 */}
-            {/* [수정 포인트] 여기도 mt-2 -> pt-4 로 변경 */}
             <div className="absolute top-full left-0 pt-4 w-48 hidden group-hover:block animation-fade-in">
               <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border border-white/40 dark:border-gray-700/50 rounded-2xl shadow-2xl overflow-hidden ring-1 ring-black/5">
                  <div className="p-2">
                   <div className="block px-4 py-3 text-sm text-gray-400 text-center italic cursor-default rounded-xl hover:bg-white/20">
                     🚧 Coming Soon
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* === [신규] pAI 드롭다운 === */}
+          <div className="relative group py-4">
+            <Link href="/pAI" className="relative z-10 text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 font-bold text-xl transition duration-300">
+              pAI
+            </Link>
+            
+            <div className="absolute top-full left-0 pt-4 w-48 hidden group-hover:block animation-fade-in">
+              <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border border-white/40 dark:border-gray-700/50 rounded-2xl shadow-2xl overflow-hidden ring-1 ring-black/5">
+                <div className="p-2 space-y-1">
+                  {/* 여기가 요청하신 0.1 ProtoType 메뉴입니다 */}
+                  <Link href="/pAI/aiPrototype0_1" className="block px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-xl hover:bg-white/50 dark:hover:bg-gray-700/50 hover:text-blue-600 transition duration-200">
+                    🤖 AI ProtoType 0.1
+                  </Link>
                 </div>
               </div>
             </div>
