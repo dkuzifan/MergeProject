@@ -112,9 +112,9 @@ export default function SummaryPanel({ rows, onScrollToRow }: Props) {
   }
 
   return (
-    <div className="flex gap-3 flex-wrap px-6 py-4 bg-gray-50 dark:bg-gray-950 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+    <div className="flex gap-3 overflow-x-auto px-6 py-4 bg-gray-50 dark:bg-gray-950 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
       {/* 🔴 수정 필요 */}
-      <div className="flex-1 min-w-[200px] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm">
+      <div className="min-w-[220px] flex-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm">
         <div className="flex items-center gap-2 mb-2 font-semibold text-sm text-gray-800 dark:text-white">
           🔴 수정 필요
           <span className="bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700 rounded-full px-2 py-0.5 text-xs font-bold">
@@ -143,7 +143,7 @@ export default function SummaryPanel({ rows, onScrollToRow }: Props) {
       </div>
 
       {/* 🟡 경고 */}
-      <div className="flex-1 min-w-[200px] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm">
+      <div className="min-w-[220px] flex-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm">
         <div className="flex items-center gap-2 mb-2 font-semibold text-sm text-gray-800 dark:text-white">
           🟡 경고
           <span className="bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-700 rounded-full px-2 py-0.5 text-xs font-bold">
@@ -171,7 +171,7 @@ export default function SummaryPanel({ rows, onScrollToRow }: Props) {
       </div>
 
       {/* 🔵 번역 대상 */}
-      <div className="flex-1 min-w-[200px] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm">
+      <div className="min-w-[220px] flex-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm">
         <div className="flex items-center gap-2 mb-2 font-semibold text-sm text-gray-800 dark:text-white">
           🔵 번역 대상
           <span className="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700 rounded-full px-2 py-0.5 text-xs font-bold">
