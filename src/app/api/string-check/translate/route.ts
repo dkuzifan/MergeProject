@@ -2,12 +2,10 @@ import { createClient } from '@/utils/supabase/server'
 import { NextResponse, type NextRequest } from 'next/server'
 
 // ─── 설정 (모델/제한 변경 시 여기만 수정) ───────────────────────────────
-const GEMINI_MODEL = 'gemini-3-pro-preview'  // 모델 변경: gemini-2.5-pro, gemini-2.5-flash 등
-const MAX_CHARS_PER_REQUEST = 2000           // 요청당 최대 글자 수 (비용 제한)
-const MAX_RETRIES = 2                        // 503 과부하 시 재시도 횟수
+const PRIMARY_MODEL = 'gemini-3-pro-preview'  // 1순위 모델
+const FALLBACK_MODEL = 'gemini-2.5-pro'       // 503 시 폴백 모델
+const MAX_CHARS_PER_REQUEST = 2000            // 요청당 최대 글자 수 (비용 제한)
 // ────────────────────────────────────────────────────────────────────────
-
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 
 const SYSTEM_PROMPT = `You are a professional game/service localization translator.
 Translate UI strings with these priorities:
@@ -17,8 +15,14 @@ Translate UI strings with these priorities:
 4. Use phrasing and style conventions appropriate for each language's gaming/app culture
 Return ONLY a valid JSON object with no extra text or markdown.`
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+async function callGemini(model: string, body: string, apiKey: string) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+  })
+  return res
 }
 
 export async function POST(request: NextRequest) {
@@ -58,26 +62,21 @@ Return JSON with these exact keys: ${JSON.stringify(emptySchema)}`
     },
   })
 
-  // 503 과부하 시 재시도 (1초 → 2초 간격)
-  let lastErrText = ''
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    if (attempt > 0) {
-      await sleep(attempt * 1000)
-    }
+  const models = [PRIMARY_MODEL, FALLBACK_MODEL]
 
+  for (const model of models) {
     try {
-      const res = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body,
-      })
+      const res = await callGemini(model, body, apiKey)
 
       if (!res.ok) {
-        lastErrText = await res.text().catch(() => '')
-        console.error(`Gemini API error [${res.status}] (attempt ${attempt + 1}):`, lastErrText)
+        const errText = await res.text().catch(() => '')
+        console.error(`Gemini [${model}] error [${res.status}]:`, errText)
 
-        // 503 과부하는 재시도 가능, 나머지는 즉시 반환
-        if (res.status === 503 && attempt < MAX_RETRIES) continue
+        // 503 과부하 → 다음 모델로 폴백, 그 외 → 즉시 반환
+        if (res.status === 503 && model !== FALLBACK_MODEL) {
+          console.log(`Falling back to ${FALLBACK_MODEL}`)
+          continue
+        }
 
         const status = res.status === 429 ? 429 : 502
         return NextResponse.json({ error: 'Translation API failed' }, { status })
@@ -90,14 +89,17 @@ Return JSON with these exact keys: ${JSON.stringify(emptySchema)}`
       try {
         translations = JSON.parse(rawText)
       } catch {
-        console.error('Gemini response parse error:', rawText)
+        console.error(`Gemini [${model}] parse error:`, rawText)
         return NextResponse.json({ error: 'Translation API failed' }, { status: 502 })
       }
 
+      if (model !== PRIMARY_MODEL) {
+        console.log(`Translation succeeded via fallback model: ${model}`)
+      }
       return NextResponse.json({ translations })
     } catch (err) {
-      console.error(`Gemini fetch error (attempt ${attempt + 1}):`, err)
-      if (attempt < MAX_RETRIES) continue
+      console.error(`Gemini [${model}] fetch error:`, err)
+      if (model !== FALLBACK_MODEL) continue
     }
   }
 
