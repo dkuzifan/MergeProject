@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>스트링 체크 & 번역 — 목업</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f5f5f5;
+      --surface: #ffffff;
+      --border: #e0e0e0;
+      --text: #1a1a1a;
+      --text-secondary: #666666;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --red-bg: #fee2e2;
+      --red-border: #fca5a5;
+      --yellow-bg: #fef9c3;
+      --yellow-border: #fde047;
+      --green: #16a34a;
+      --radius: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ───── NAV ───── */
+    .nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .nav-logo { font-weight: 700; font-size: 16px; color: var(--primary); }
+    .nav-title { color: var(--text-secondary); font-size: 13px; }
+
+    /* ───── SCREEN TOGGLE ───── */
+    .screen-toggle {
+      display: flex;
+      gap: 8px;
+      padding: 16px 24px 0;
+    }
+    .toggle-btn {
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--text-secondary);
+      transition: all .15s;
+    }
+    .toggle-btn.active {
+      border-color: var(--primary);
+      color: var(--primary);
+      background: #eff6ff;
+      font-weight: 600;
+    }
+
+    /* ───── SCREENS ───── */
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* ═══════════════════════════════
+       SCREEN 1 — UPLOAD
+    ═══════════════════════════════ */
+    .upload-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - 100px);
+      padding: 40px 24px;
+    }
+
+    .upload-card {
+      background: var(--surface);
+      border: 2px dashed var(--border);
+      border-radius: 16px;
+      padding: 60px 48px;
+      text-align: center;
+      width: 100%;
+      max-width: 480px;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+    }
+    .upload-card:hover,
+    .upload-card.drag-over {
+      border-color: var(--primary);
+      background: #eff6ff;
+    }
+    .upload-icon {
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 20px;
+      background: #eff6ff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .upload-icon svg { width: 28px; height: 28px; color: var(--primary); }
+    .upload-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+    .upload-sub { color: var(--text-secondary); font-size: 13px; margin-bottom: 24px; }
+    .upload-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      background: var(--primary);
+      color: #fff;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .upload-btn:hover { background: var(--primary-hover); }
+    .upload-hint {
+      margin-top: 16px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .upload-error {
+      margin-top: 20px;
+      padding: 10px 16px;
+      background: var(--red-bg);
+      border: 1px solid var(--red-border);
+      border-radius: 8px;
+      color: #b91c1c;
+      font-size: 13px;
+    }
+
+    /* ═══════════════════════════════
+       SCREEN 2 — RESULTS
+    ═══════════════════════════════ */
+    .results-screen { padding: 0; }
+
+    /* ── Action Bar ── */
+    .action-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .file-name {
+      font-weight: 600;
+      font-size: 13px;
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .file-name span { color: var(--text-secondary); font-weight: 400; margin-left: 4px; }
+
+    .action-group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+    .btn {
+      padding: 7px 14px;
+      border-radius: 7px;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all .15s;
+      white-space: nowrap;
+    }
+    .btn:hover { border-color: #aaa; background: #f9f9f9; }
+    .btn.primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
+    .btn.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+    .btn.toggle-active {
+      background: #eff6ff;
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+    .btn.danger { border-color: #fca5a5; color: #dc2626; }
+    .btn.danger:hover { background: var(--red-bg); }
+
+    /* ── Summary Panel ── */
+    .summary-panel {
+      display: flex;
+      gap: 12px;
+      padding: 16px 24px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .summary-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      flex: 1;
+      min-width: 200px;
+      box-shadow: var(--shadow);
+    }
+    .summary-card-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+    .badge-red {
+      background: #fee2e2;
+      color: #b91c1c;
+      border: 1px solid #fca5a5;
+      border-radius: 12px;
+      padding: 1px 8px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .badge-yellow {
+      background: #fef9c3;
+      color: #854d0e;
+      border: 1px solid #fde047;
+      border-radius: 12px;
+      padding: 1px 8px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    /* ── Summary Row Groups ── */
+    .summary-list { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+
+    /* 행 그룹 컨테이너 */
+    .summary-row-group { border-radius: 6px; overflow: hidden; }
+
+    /* 행 헤더 (항상 보임) */
+    .summary-row-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background .1s;
+    }
+    .summary-row-header:hover { background: #f0f0f0; }
+
+    /* index 클릭 링크 */
+    .summary-index-link {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      border: 1px solid #e5e7eb;
+      background: #f3f4f6;
+      color: var(--primary);
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      text-decoration: none;
+    }
+    .summary-index-link:hover { background: #dbeafe; border-color: #bfdbfe; }
+
+    /* 언어 태그 묶음 */
+    .summary-lang-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      flex: 1;
+    }
+    .lang-tag {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 10px;
+      white-space: nowrap;
+    }
+    .lang-tag-red {
+      background: #fee2e2;
+      color: #b91c1c;
+      border: 1px solid #fca5a5;
+    }
+    .lang-tag-yellow {
+      background: #fef9c3;
+      color: #854d0e;
+      border: 1px solid #fde047;
+    }
+
+    /* 토글 아이콘 */
+    .summary-toggle-icon {
+      font-size: 10px;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+      transition: transform .15s;
+    }
+    .summary-row-group.expanded .summary-toggle-icon { transform: rotate(180deg); }
+
+    /* 상세 목록 (토글로 펼침) */
+    .summary-detail-list {
+      display: none;
+      flex-direction: column;
+      gap: 1px;
+      padding: 2px 8px 6px 28px;
+    }
+    .summary-row-group.expanded .summary-detail-list { display: flex; }
+    .summary-detail-item {
+      font-size: 11px;
+      color: var(--text-secondary);
+      padding: 3px 6px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .summary-detail-item::before {
+      content: '└';
+      color: #d1d5db;
+      font-size: 12px;
+    }
+    .detail-dot-red {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #ef4444; flex-shrink: 0;
+    }
+    .detail-dot-yellow {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #eab308; flex-shrink: 0;
+    }
+
+    .summary-more {
+      font-size: 11px;
+      color: var(--primary);
+      padding: 4px 8px;
+      cursor: pointer;
+    }
+
+    /* ── Table Wrapper ── */
+    .table-wrapper {
+      overflow-x: auto;
+      padding: 16px 24px 40px;
+    }
+
+    /* Progress bar */
+    .progress-bar-wrap {
+      margin: 0 24px 12px;
+      background: #e5e7eb;
+      border-radius: 4px;
+      height: 6px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--primary);
+      width: 45%;
+      border-radius: 4px;
+      transition: width .3s;
+    }
+    .progress-label {
+      margin: 0 24px 16px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    /* ── String Table ── */
+    .string-table {
+      border-collapse: collapse;
+      min-width: 1400px;
+      width: 100%;
+      font-size: 12px;
+      background: var(--surface);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+    .string-table th {
+      background: #f9fafb;
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      font-weight: 600;
+      font-size: 12px;
+      text-align: left;
+      white-space: nowrap;
+      position: sticky;
+      top: 52px;
+      z-index: 10;
+    }
+    .string-table th:first-child {
+      position: sticky;
+      left: 0;
+      z-index: 20;
+      background: #f0f4ff;
+      border-right: 2px solid #c7d2fe;
+    }
+    .string-table td {
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      vertical-align: top;
+      max-width: 160px;
+      min-width: 100px;
+    }
+    .string-table td:first-child {
+      position: sticky;
+      left: 0;
+      background: #f9fafb;
+      border-right: 2px solid #e5e7eb;
+      font-weight: 600;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      z-index: 5;
+    }
+    .string-table tr:hover td { background: #fafafa; }
+    .string-table tr:hover td:first-child { background: #f0f0f0; }
+
+    /* Cell states */
+    .cell-text { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+    .cell-empty { background: #fee2e2 !important; }
+    .cell-error { background: #fee2e2 !important; position: relative; cursor: help; }
+    .cell-warning { background: #fef9c3 !important; position: relative; cursor: help; }
+    .cell-translating { background: #eff6ff !important; color: #93c5fd; font-style: italic; }
+    .cell-translate-fail { background: #fff7ed !important; border: 1.5px solid #fb923c !important; }
+
+    /* Tooltip */
+    .has-tooltip { position: relative; }
+    .has-tooltip .tooltip {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 4px);
+      left: 0;
+      background: #1f2937;
+      color: #fff;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      white-space: nowrap;
+      z-index: 50;
+      pointer-events: none;
+    }
+    .has-tooltip:hover .tooltip { display: block; }
+
+    /* Row translate button */
+    .cell-action {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      padding: 8px 12px;
+      white-space: nowrap;
+      vertical-align: middle;
+      text-align: center;
+    }
+    .translate-row-btn {
+      padding: 4px 10px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 5px;
+      color: var(--primary);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .translate-row-btn:hover { background: #dbeafe; }
+
+    /* Inline edit cell */
+    .cell-editing {
+      outline: 2px solid var(--primary) !important;
+      background: #fff !important;
+    }
+    .cell-input {
+      width: 100%;
+      border: none;
+      outline: none;
+      font-size: 12px;
+      font-family: inherit;
+      background: transparent;
+      min-width: 120px;
+    }
+
+    /* ───── LEGEND ───── */
+    .legend {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      padding: 10px 24px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--text-secondary);
+      flex-wrap: wrap;
+    }
+    .legend-item { display: flex; align-items: center; gap: 5px; }
+    .legend-swatch {
+      width: 14px; height: 14px; border-radius: 3px;
+      border: 1px solid rgba(0,0,0,.1);
+    }
+    .legend-red { background: var(--red-bg); }
+    .legend-yellow { background: var(--yellow-bg); }
+    .legend-blue { background: #eff6ff; }
+
+    /* ───── SCREEN 3 — TRANSLATE STATE ───── */
+    /* (reuses results-screen, shown as variant) */
+
+    /* ───── UTIL ───── */
+    .section-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 6px;
+    }
+
+    /* row number badge */
+    .row-num {
+      display: inline-block;
+      background: #f3f4f6;
+      border: 1px solid #e5e7eb;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: 10px;
+      color: #6b7280;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <span class="nav-logo">머지팀 작업실</span>
+  <span style="color:var(--border)">|</span>
+  <span class="nav-title">스트링 체크 & 번역</span>
+</nav>
+
+<!-- Screen Toggle (demo helper) -->
+<div class="screen-toggle">
+  <button class="toggle-btn active" onclick="showScreen('upload')">① 업로드 화면</button>
+  <button class="toggle-btn" onclick="showScreen('results')">② 결과 화면</button>
+  <button class="toggle-btn" onclick="showScreen('translating')">③ 번역 진행 중</button>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 1 — UPLOAD
+════════════════════════════════════════ -->
+<div id="screen-upload" class="screen active">
+  <div class="upload-screen">
+    <div class="upload-card" id="dropzone">
+      <div class="upload-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+      </div>
+      <p class="upload-title">string.xlsx 파일을 업로드하세요</p>
+      <p class="upload-sub">드래그&드롭하거나 버튼을 클릭해 파일을 선택하세요</p>
+      <button class="upload-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+        파일 선택
+      </button>
+      <p class="upload-hint">.xlsx 파일만 지원합니다 · 브라우저에서만 처리됨 (서버 미저장)</p>
+    </div>
+
+    <!-- 오류 상태 예시 -->
+    <div style="max-width:480px;width:100%;margin-top:16px;">
+      <p style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;font-weight:600;">✦ 오류 상태 예시</p>
+      <div class="upload-error">xlsx 파일만 지원합니다. 다른 형식의 파일을 업로드할 수 없습니다.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 2 — RESULTS
+════════════════════════════════════════ -->
+<div id="screen-results" class="screen">
+
+  <!-- Action Bar -->
+  <div class="action-bar">
+    <div class="file-name">string.xlsx <span>· 248행 로드됨</span></div>
+    <div class="action-group">
+      <button class="btn toggle-active" title="오류/경고가 있는 행만 표시">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+        오류 행만
+      </button>
+      <button class="btn primary">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l6 6 6-6"/><path d="M12 2v12"/><rect x="3" y="18" width="18" height="4" rx="1"/></svg>
+        전체 번역
+      </button>
+      <button class="btn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        다운로드
+      </button>
+      <button class="btn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.16"/></svg>
+        파일 변경
+      </button>
+    </div>
+  </div>
+
+  <!-- Summary Panel -->
+  <div class="summary-panel">
+    <!-- RED card -->
+    <div class="summary-card">
+      <div class="summary-card-header">
+        🔴 수정 필요 <span class="badge-red">7행 · 12건</span>
+      </div>
+      <ul class="summary-list">
+
+        <!-- 행 그룹 1: STR_0005 — 오류 1개 -->
+        <li class="summary-row-group" id="rg-red-1">
+          <div class="summary-row-header" onclick="toggleGroup('rg-red-1')">
+            <a class="summary-index-link" onclick="event.stopPropagation(); scrollToRow('row-str0005')" title="해당 행으로 이동">STR_0005</a>
+            <div class="summary-lang-tags">
+              <span class="lang-tag lang-tag-red">영어</span>
+            </div>
+            <span class="summary-toggle-icon">▼</span>
+          </div>
+          <div class="summary-detail-list">
+            <div class="summary-detail-item"><span class="detail-dot-red"></span>영어 — 빈 셀</div>
+          </div>
+        </li>
+
+        <!-- 행 그룹 2: STR_0007 — 오류 1개 -->
+        <li class="summary-row-group" id="rg-red-2">
+          <div class="summary-row-header" onclick="toggleGroup('rg-red-2')">
+            <a class="summary-index-link" onclick="event.stopPropagation(); scrollToRow('row-str0007')" title="해당 행으로 이동">STR_0007</a>
+            <div class="summary-lang-tags">
+              <span class="lang-tag lang-tag-red">일본어</span>
+            </div>
+            <span class="summary-toggle-icon">▼</span>
+          </div>
+          <div class="summary-detail-list">
+            <div class="summary-detail-item"><span class="detail-dot-red"></span>일본어 — 언어 오류 (감지: 한국어)</div>
+          </div>
+        </li>
+
+        <!-- 행 그룹 3: STR_0012 — 오류 3개 (펼쳐진 상태) -->
+        <li class="summary-row-group expanded" id="rg-red-3">
+          <div class="summary-row-header" onclick="toggleGroup('rg-red-3')">
+            <a class="summary-index-link" onclick="event.stopPropagation(); scrollToRow('row-str0012')" title="해당 행으로 이동">STR_0012</a>
+            <div class="summary-lang-tags">
+              <span class="lang-tag lang-tag-red">프랑스어</span>
+              <span class="lang-tag lang-tag-red">인도네시아어</span>
+              <span class="lang-tag lang-tag-red">러시아어</span>
+            </div>
+            <span class="summary-toggle-icon">▼</span>
+          </div>
+          <div class="summary-detail-list">
+            <div class="summary-detail-item"><span class="detail-dot-red"></span>프랑스어 — 빈 셀</div>
+            <div class="summary-detail-item"><span class="detail-dot-red"></span>인도네시아어 — 빈 셀</div>
+            <div class="summary-detail-item"><span class="detail-dot-red"></span>러시아어 — 언어 오류 (감지: 영어)</div>
+          </div>
+        </li>
+
+        <!-- 행 그룹 4: STR_0031 — 오류 2개 -->
+        <li class="summary-row-group" id="rg-red-4">
+          <div class="summary-row-header" onclick="toggleGroup('rg-red-4')">
+            <a class="summary-index-link" onclick="event.stopPropagation(); scrollToRow('row-str0031')" title="해당 행으로 이동">STR_0031</a>
+            <div class="summary-lang-tags">
+              <span class="lang-tag lang-tag-red">스페인어</span>
+              <span class="lang-tag lang-tag-red">베트남어</span>
+            </div>
+            <span class="summary-toggle-icon">▼</span>
+          </div>
+          <div class="summary-detail-list">
+            <div class="summary-detail-item"><span class="detail-dot-red"></span>스페인어 — 빈 셀</div>
+            <div class="summary-detail-item"><span class="detail-dot-red"></span>베트남어 — 언어 오류 (감지: 영어)</div>
+          </div>
+        </li>
+
+      </ul>
+      <p class="summary-more">+ 3행 더 보기</p>
+    </div>
+
+    <!-- YELLOW card -->
+    <div class="summary-card">
+      <div class="summary-card-header">
+        🟡 경고 <span class="badge-yellow">4행 · 5건</span>
+      </div>
+      <ul class="summary-list">
+
+        <!-- 행 그룹 1: STR_0002 — 경고 1개 (펼쳐진 상태) -->
+        <li class="summary-row-group expanded" id="rg-yellow-1">
+          <div class="summary-row-header" onclick="toggleGroup('rg-yellow-1')">
+            <a class="summary-index-link" onclick="event.stopPropagation(); scrollToRow('row-str0002')" title="해당 행으로 이동">STR_0002</a>
+            <div class="summary-lang-tags">
+              <span class="lang-tag lang-tag-yellow">중국어(번체)</span>
+            </div>
+            <span class="summary-toggle-icon">▼</span>
+          </div>
+          <div class="summary-detail-list">
+            <div class="summary-detail-item"><span class="detail-dot-yellow"></span>중국어(번체) — 공용 외래어 추정 (8/9개 언어 동일)</div>
+          </div>
+        </li>
+
+        <!-- 행 그룹 2: STR_0018 — 경고 2개 -->
+        <li class="summary-row-group" id="rg-yellow-2">
+          <div class="summary-row-header" onclick="toggleGroup('rg-yellow-2')">
+            <a class="summary-index-link" onclick="event.stopPropagation(); scrollToRow('row-str0018')" title="해당 행으로 이동">STR_0018</a>
+            <div class="summary-lang-tags">
+              <span class="lang-tag lang-tag-yellow">스페인어</span>
+              <span class="lang-tag lang-tag-yellow">독일어</span>
+            </div>
+            <span class="summary-toggle-icon">▼</span>
+          </div>
+          <div class="summary-detail-list">
+            <div class="summary-detail-item"><span class="detail-dot-yellow"></span>스페인어 — 공용 외래어 추정 (7/9개 언어 동일)</div>
+            <div class="summary-detail-item"><span class="detail-dot-yellow"></span>독일어 — 공용 외래어 추정 (7/9개 언어 동일)</div>
+          </div>
+        </li>
+
+        <!-- 행 그룹 3: STR_0044 — 경고 1개 -->
+        <li class="summary-row-group" id="rg-yellow-3">
+          <div class="summary-row-header" onclick="toggleGroup('rg-yellow-3')">
+            <a class="summary-index-link" onclick="event.stopPropagation(); scrollToRow('row-str0044')" title="해당 행으로 이동">STR_0044</a>
+            <div class="summary-lang-tags">
+              <span class="lang-tag lang-tag-yellow">인도네시아어</span>
+            </div>
+            <span class="summary-toggle-icon">▼</span>
+          </div>
+          <div class="summary-detail-list">
+            <div class="summary-detail-item"><span class="detail-dot-yellow"></span>인도네시아어 — 공용 외래어 추정 (6/9개 언어 동일)</div>
+          </div>
+        </li>
+
+      </ul>
+      <p class="summary-more">+ 1행 더 보기</p>
+    </div>
+
+    <!-- Stats card -->
+    <div class="summary-card" style="flex:0;min-width:160px;max-width:200px;">
+      <div class="summary-card-header" style="font-size:12px;">📊 현황</div>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:12px;">
+        <div style="display:flex;justify-content:space-between;">
+          <span style="color:var(--text-secondary)">전체 행</span>
+          <span style="font-weight:600;">248</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;">
+          <span style="color:var(--text-secondary)">번역 대상</span>
+          <span style="font-weight:600;color:var(--primary);">34</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;">
+          <span style="color:var(--text-secondary)">오류</span>
+          <span style="font-weight:600;color:#dc2626;">12</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;">
+          <span style="color:var(--text-secondary)">경고</span>
+          <span style="font-weight:600;color:#ca8a04;">5</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <strong style="font-size:12px;color:var(--text);">범례:</strong>
+    <div class="legend-item"><div class="legend-swatch legend-red"></div>빈 셀 / 언어 오류</div>
+    <div class="legend-item"><div class="legend-swatch legend-yellow"></div>공용 외래어 추정</div>
+    <div class="legend-item"><div class="legend-swatch legend-blue"></div>번역 중</div>
+    <div class="legend-item" style="margin-left:auto;font-size:11px;">셀 클릭 → 인라인 편집</div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrapper">
+    <table class="string-table">
+      <thead>
+        <tr>
+          <th>인덱스 (A)</th>
+          <th>🇰🇷 한국어 (B)</th>
+          <th>🇺🇸 영어 (C)</th>
+          <th>🇫🇷 프랑스어 (D)</th>
+          <th>🇯🇵 일본어 (E)</th>
+          <th>🇪🇸 스페인어 (F)</th>
+          <th>🇩🇪 독일어 (G)</th>
+          <th>🇮🇩 인도네시아어 (H)</th>
+          <th>🇻🇳 베트남어 (I)</th>
+          <th>🇹🇼 중국어(번체) (J)</th>
+          <th>🇷🇺 러시아어 (K)</th>
+          <th style="background:#f9fafb;">번역</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <!-- Row 4 — 정상 -->
+        <tr id="row-str0001">
+          <td>STR_0001</td>
+          <td><span class="cell-text">시작하기</span></td>
+          <td><span class="cell-text">Get Started</span></td>
+          <td><span class="cell-text">Commencer</span></td>
+          <td><span class="cell-text">始める</span></td>
+          <td><span class="cell-text">Comenzar</span></td>
+          <td><span class="cell-text">Loslegen</span></td>
+          <td><span class="cell-text">Mulai</span></td>
+          <td><span class="cell-text">Bắt đầu</span></td>
+          <td><span class="cell-text">開始</span></td>
+          <td><span class="cell-text">Начать</span></td>
+          <td class="cell-action">—</td>
+        </tr>
+
+        <!-- Row 5 — 공용 외래어 경고 (중국어 셀) -->
+        <tr id="row-str0002">
+          <td>STR_0002</td>
+          <td><span class="cell-text">튜토리얼</span></td>
+          <td><span class="cell-text">Tutorial</span></td>
+          <td><span class="cell-text">Tutoriel</span></td>
+          <td><span class="cell-text">チュートリアル</span></td>
+          <td><span class="cell-text">Tutorial</span></td>
+          <td><span class="cell-text">Tutorial</span></td>
+          <td><span class="cell-text">Tutorial</span></td>
+          <td><span class="cell-text">Tutorial</span></td>
+          <td class="cell-warning has-tooltip">
+            <span class="cell-text">Tutorial</span>
+            <span class="tooltip">공용 외래어로 추정됨 (8/9개 언어 동일)</span>
+          </td>
+          <td><span class="cell-text">Tutorial</span></td>
+          <td class="cell-action">—</td>
+        </tr>
+
+        <!-- Row 6 — 한국어만 있음 → 번역 대상 -->
+        <tr id="row-str0003">
+          <td>STR_0003</td>
+          <td><span class="cell-text">설정 저장 완료</span></td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-action">
+            <button class="translate-row-btn">번역</button>
+          </td>
+        </tr>
+
+        <!-- Row 7 — 정상 -->
+        <tr id="row-str0004">
+          <td>STR_0004</td>
+          <td><span class="cell-text">다음</span></td>
+          <td><span class="cell-text">Next</span></td>
+          <td><span class="cell-text">Suivant</span></td>
+          <td><span class="cell-text">次へ</span></td>
+          <td><span class="cell-text">Siguiente</span></td>
+          <td><span class="cell-text">Weiter</span></td>
+          <td><span class="cell-text">Berikutnya</span></td>
+          <td><span class="cell-text">Tiếp theo</span></td>
+          <td><span class="cell-text">下一步</span></td>
+          <td><span class="cell-text">Далее</span></td>
+          <td class="cell-action">—</td>
+        </tr>
+
+        <!-- Row 8 — 영어 빈 셀 (오류) -->
+        <tr id="row-str0005">
+          <td>STR_0005</td>
+          <td><span class="cell-text">업적 달성!</span></td>
+          <td class="cell-empty has-tooltip">
+            <span class="tooltip">빈 셀</span>
+          </td>
+          <td><span class="cell-text">Succès accompli !</span></td>
+          <td><span class="cell-text">実績達成！</span></td>
+          <td><span class="cell-text">¡Logro conseguido!</span></td>
+          <td><span class="cell-text">Erfolg erreicht!</span></td>
+          <td><span class="cell-text">Pencapaian!</span></td>
+          <td><span class="cell-text">Thành tích!</span></td>
+          <td><span class="cell-text">成就達成！</span></td>
+          <td><span class="cell-text">Достижение!</span></td>
+          <td class="cell-action">—</td>
+        </tr>
+
+        <!-- Row 9 — 인라인 편집 상태 예시 -->
+        <tr id="row-str0006">
+          <td>STR_0006</td>
+          <td><span class="cell-text">뒤로 가기</span></td>
+          <td class="cell-editing">
+            <input class="cell-input" value="Go Back" />
+          </td>
+          <td><span class="cell-text">Retour</span></td>
+          <td><span class="cell-text">戻る</span></td>
+          <td><span class="cell-text">Volver</span></td>
+          <td><span class="cell-text">Zurück</span></td>
+          <td><span class="cell-text">Kembali</span></td>
+          <td><span class="cell-text">Quay lại</span></td>
+          <td><span class="cell-text">返回</span></td>
+          <td><span class="cell-text">Назад</span></td>
+          <td class="cell-action">—</td>
+        </tr>
+
+        <!-- Row 15 — 언어 오류 (일본어 셀에 한국어 입력) -->
+        <tr id="row-str0007">
+          <td>STR_0007</td>
+          <td><span class="cell-text">캐릭터 선택</span></td>
+          <td><span class="cell-text">Character Select</span></td>
+          <td><span class="cell-text">Sélection</span></td>
+          <td class="cell-error has-tooltip">
+            <span class="cell-text">캐릭터 선택</span>
+            <span class="tooltip">언어 오류: 감지된 언어 — 한국어 (일본어 필요)</span>
+          </td>
+          <td><span class="cell-text">Selección</span></td>
+          <td><span class="cell-text">Auswahl</span></td>
+          <td><span class="cell-text">Pilih</span></td>
+          <td><span class="cell-text">Chọn nhân vật</span></td>
+          <td><span class="cell-text">選擇角色</span></td>
+          <td><span class="cell-text">Выбор персонажа</span></td>
+          <td class="cell-action">—</td>
+        </tr>
+
+        <!-- Row — 번역 실패 상태 -->
+        <tr id="row-str0008">
+          <td>STR_0008</td>
+          <td><span class="cell-text">점수 계산 중</span></td>
+          <td class="cell-translate-fail has-tooltip" style="cursor:pointer;">
+            <span style="color:#ea580c;font-size:11px;font-weight:600;">번역 실패 — 클릭하여 재시도</span>
+            <span class="tooltip">API 오류: 할당량 초과. 클릭하여 재시도</span>
+          </td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-action">
+            <button class="translate-row-btn">재시도</button>
+          </td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 3 — TRANSLATING (전체 번역 진행 중)
+════════════════════════════════════════ -->
+<div id="screen-translating" class="screen">
+
+  <!-- Action Bar (same) -->
+  <div class="action-bar">
+    <div class="file-name">string.xlsx <span>· 248행 로드됨</span></div>
+    <div class="action-group">
+      <button class="btn" disabled style="opacity:.5;cursor:not-allowed;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+        오류 행만
+      </button>
+      <button class="btn danger">
+        ✕ 번역 중지
+      </button>
+      <button class="btn" disabled style="opacity:.5;cursor:not-allowed;">다운로드</button>
+      <button class="btn" disabled style="opacity:.5;cursor:not-allowed;">파일 변경</button>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div class="summary-panel" style="flex-direction:column;gap:8px;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span style="font-size:13px;font-weight:600;">전체 번역 진행 중...</span>
+      <span style="font-size:12px;color:var(--text-secondary);">15 / 34행 완료</span>
+    </div>
+    <div class="progress-bar-wrap" style="margin:0;width:100%;max-width:600px;">
+      <div class="progress-bar-fill" style="width:44%;"></div>
+    </div>
+    <p style="font-size:11px;color:var(--text-secondary);">STR_0019 처리 중 — 스페인어, 독일어, 인도네시아어…</p>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <strong style="font-size:12px;color:var(--text);">범례:</strong>
+    <div class="legend-item"><div class="legend-swatch legend-red"></div>빈 셀 / 언어 오류</div>
+    <div class="legend-item"><div class="legend-swatch legend-yellow"></div>공용 외래어 추정</div>
+    <div class="legend-item"><div class="legend-swatch legend-blue"></div>번역 중</div>
+  </div>
+
+  <!-- Table (진행 중 상태 포함) -->
+  <div class="table-wrapper">
+    <table class="string-table">
+      <thead>
+        <tr>
+          <th>인덱스 (A)</th>
+          <th>🇰🇷 한국어 (B)</th>
+          <th>🇺🇸 영어 (C)</th>
+          <th>🇫🇷 프랑스어 (D)</th>
+          <th>🇯🇵 일본어 (E)</th>
+          <th>🇪🇸 스페인어 (F)</th>
+          <th>🇩🇪 독일어 (G)</th>
+          <th>🇮🇩 인도네시아어 (H)</th>
+          <th>🇻🇳 베트남어 (I)</th>
+          <th>🇹🇼 중국어(번체) (J)</th>
+          <th>🇷🇺 러시아어 (K)</th>
+          <th style="background:#f9fafb;">번역</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- 번역 완료된 행 -->
+        <tr>
+          <td>STR_0003</td>
+          <td><span class="cell-text">설정 저장 완료</span></td>
+          <td><span class="cell-text">Settings Saved</span></td>
+          <td><span class="cell-text">Paramètres sauvegardés</span></td>
+          <td><span class="cell-text">設定を保存しました</span></td>
+          <td><span class="cell-text">Configuración guardada</span></td>
+          <td><span class="cell-text">Einstellungen gespeichert</span></td>
+          <td><span class="cell-text">Pengaturan tersimpan</span></td>
+          <td><span class="cell-text">Đã lưu cài đặt</span></td>
+          <td><span class="cell-text">設定已儲存</span></td>
+          <td><span class="cell-text">Настройки сохранены</span></td>
+          <td class="cell-action" style="color:var(--green);font-weight:600;font-size:12px;">✓ 완료</td>
+        </tr>
+        <!-- 현재 번역 중인 행 -->
+        <tr style="opacity:.9;">
+          <td>STR_0019</td>
+          <td><span class="cell-text">점수판 보기</span></td>
+          <td><span class="cell-text">View Scoreboard</span></td>
+          <td><span class="cell-text">Voir le tableau</span></td>
+          <td class="cell-translating"><span class="cell-text">翻訳中…</span></td>
+          <td class="cell-translating"><span class="cell-text">Traduciendo…</span></td>
+          <td class="cell-translating"><span class="cell-text">Übersetzen…</span></td>
+          <td class="cell-translating"><span class="cell-text">Menerjemahkan…</span></td>
+          <td class="cell-translating"><span class="cell-text">Đang dịch…</span></td>
+          <td class="cell-translating"><span class="cell-text">翻譯中…</span></td>
+          <td class="cell-translating"><span class="cell-text">Перевод…</span></td>
+          <td class="cell-action" style="color:var(--primary);font-size:11px;">번역 중</td>
+        </tr>
+        <!-- 아직 대기 중인 행 -->
+        <tr style="opacity:.4;">
+          <td>STR_0025</td>
+          <td><span class="cell-text">새 게임</span></td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-empty"></td>
+          <td class="cell-action" style="font-size:11px;color:var(--text-secondary);">대기 중</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('screen-' + id).classList.add('active');
+    event.target.classList.add('active');
+  }
+
+  // Dropzone hover effect
+  const dz = document.getElementById('dropzone');
+  if (dz) {
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+    dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag-over'); });
+  }
+
+  // 요약 패널: 행 그룹 토글 (상세 펼치기/접기)
+  function toggleGroup(id) {
+    const group = document.getElementById(id);
+    if (group) group.classList.toggle('expanded');
+  }
+
+  // 요약 패널: index 클릭 → 해당 테이블 행으로 스크롤 + 하이라이트
+  function scrollToRow(rowId) {
+    const row = document.getElementById(rowId);
+    if (!row) return;
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // 잠깐 하이라이트
+    row.style.transition = 'background .1s';
+    row.style.background = '#dbeafe';
+    setTimeout(() => { row.style.background = ''; }, 1500);
+  }
+</script>
+</body>
+</html>

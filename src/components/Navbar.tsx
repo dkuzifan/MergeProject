@@ -85,6 +85,22 @@ export default function Navbar() {
             </div>
           </div>
 
+          {/* === 도구 드롭다운 === */}
+          <div className="relative group py-4">
+            <span className="relative z-10 text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 font-bold text-xl transition duration-300 cursor-default">
+              도구
+            </span>
+            <div className="absolute top-full left-0 pt-4 w-48 hidden group-hover:block animation-fade-in">
+              <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border border-white/40 dark:border-gray-700/50 rounded-2xl shadow-2xl overflow-hidden ring-1 ring-black/5">
+                <div className="p-2 space-y-1">
+                  <Link href="/string-check" className="block px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-xl hover:bg-white/50 dark:hover:bg-gray-700/50 hover:text-blue-600 transition duration-200">
+                    🔤 스트링 체크
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* === [신규] pAI 드롭다운 === */}
           <div className="relative group py-4">
             <Link href="/pAI" className="relative z-10 text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 font-bold text-xl transition duration-300">
