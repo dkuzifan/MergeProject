@@ -4,10 +4,31 @@ import { useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import type { WorkBook } from 'xlsx'
 import { detectIssues } from '../lib/detectIssues'
-import type { StringRow } from '../types'
+import type { SheetData, StringRow } from '../types'
 
 interface Props {
-  onUpload: (rows: StringRow[], workbook: WorkBook, fileName: string) => void
+  onUpload: (sheets: SheetData[], workbook: WorkBook, fileName: string) => void
+}
+
+function parseSheet(ws: XLSX.WorkSheet): StringRow[] | null {
+  const rawRows = XLSX.utils.sheet_to_json<(string | number | null)[]>(ws, {
+    header: 1,
+    defval: '',
+  })
+
+  if (rawRows.length < 4 || (rawRows[3] as unknown[]).length < 11) return null
+
+  const dataRows: StringRow[] = (rawRows.slice(3) as (string | number | null)[][])
+    .filter((row) => row[0] !== '' && row[0] != null)
+    .map((row) => ({
+      index: String(row[0] ?? ''),
+      cells: Array.from({ length: 10 }, (_, i) => String(row[i + 1] ?? '')),
+      issues: {},
+      translateFailed: {},
+    }))
+
+  if (dataRows.length === 0) return null
+  return detectIssues(dataRows)
 }
 
 export default function UploadScreen({ onUpload }: Props) {
@@ -27,35 +48,21 @@ export default function UploadScreen({ onUpload }: Props) {
       try {
         const data = new Uint8Array(e.target!.result as ArrayBuffer)
         const workbook = XLSX.read(data, { type: 'array' })
-        const sheetName = workbook.SheetNames[0]
-        const ws = workbook.Sheets[sheetName]
-        const rawRows = XLSX.utils.sheet_to_json<(string | number | null)[]>(ws, {
-          header: 1,
-          defval: '',
-        })
 
-        // 4행(index 3)부터 데이터, 최소 11컬럼 검증
-        if (rawRows.length < 4 || (rawRows[3] as unknown[]).length < 11) {
-          setError('파일 구조가 올바르지 않습니다. 4행~부터 데이터가 있는 xlsx 파일을 업로드해주세요.')
+        // 유효한 시트만 파싱 (구조 검증 통과한 시트)
+        const validSheets: SheetData[] = []
+        for (const sheetName of workbook.SheetNames) {
+          const ws = workbook.Sheets[sheetName]
+          const rows = parseSheet(ws)
+          if (rows) validSheets.push({ name: sheetName, rows })
+        }
+
+        if (validSheets.length === 0) {
+          setError('유효한 시트를 찾을 수 없습니다. 4행부터 데이터가 있고 A~K 컬럼 구조를 가진 시트가 필요합니다.')
           return
         }
 
-        const dataRows: StringRow[] = (rawRows.slice(3) as (string | number | null)[][])
-          .filter((row) => row[0] !== '' && row[0] != null)
-          .map((row) => ({
-            index: String(row[0] ?? ''),
-            cells: Array.from({ length: 10 }, (_, i) => String(row[i + 1] ?? '')),
-            issues: {},
-            translateFailed: {},
-          }))
-
-        if (dataRows.length === 0) {
-          setError('데이터 행이 없습니다.')
-          return
-        }
-
-        const detected = detectIssues(dataRows)
-        onUpload(detected, workbook, file.name)
+        onUpload(validSheets, workbook, file.name)
       } catch {
         setError('파일을 읽는 중 오류가 발생했습니다.')
       }
@@ -106,7 +113,7 @@ export default function UploadScreen({ onUpload }: Props) {
           </svg>
           파일 선택
         </button>
-        <p className="mt-4 text-xs text-gray-400">.xlsx 파일만 지원 · 브라우저 내 처리 (서버 미저장)</p>
+        <p className="mt-4 text-xs text-gray-400">.xlsx 파일만 지원 · STRING_LOCAL / STRING_SERVER 시트 자동 인식 · 브라우저 내 처리</p>
       </div>
 
       {error && (

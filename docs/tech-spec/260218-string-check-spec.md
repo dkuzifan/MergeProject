@@ -38,7 +38,7 @@ status: draft
 
 세 가지 순수 JS 함수 모듈로 분리:
 
-1. **xlsx 파싱** (`parseXlsx`): SheetJS `read()` → 4행~부터 데이터 추출 (A=인덱스, B~K=언어)
+1. **xlsx 파싱** (`parseXlsx`): SheetJS `read()` → 전체 시트 순회 → 유효한 시트(4행~, A~K 11컬럼)만 파싱 → `SheetData[]` 반환
 2. **오류/경고 감지** (`detectIssues`): 행·셀 단위 순회
    - 빈 셀 감지 → `error: 'empty'`
    - 언어 오류 감지: `tinyld.detect(cellValue)` → 기대 언어 코드와 비교 → `error: 'wrong-lang'`
@@ -50,10 +50,14 @@ status: draft
 - **신규 페이지**: `src/app/string-check/page.tsx`
   - `'use client'` 컴포넌트 (파일 파싱, 편집, 상태 관리 모두 클라이언트)
   - 기존 `AppShell` 내에 포함 → Navbar 자동 표시
+  - 상태: `sheets: SheetData[]`, `activeSheetName: string`, `translatingRows: Record<sheetName, Set<rowIndex>>`
+  - 시트 탭 UI: 탭 클릭 → activeSheetName 변경 → SummaryPanel/StringTable 자동 갱신
+  - 다운로드: 모든 시트를 순회하여 원본 workbook에 반영 후 단일 xlsx 출력
 - **신규 컴포넌트** (`src/app/string-check/components/`):
-  - `UploadScreen.tsx` — 드래그&드롭 업로드 UI
+  - `UploadScreen.tsx` — 드래그&드롭 업로드 UI, 전체 시트 파싱 후 유효 시트만 전달
   - `SummaryPanel.tsx` — 오류/경고 요약 패널 (행 그룹 + 토글 + index 스크롤)
   - `StringTable.tsx` — 11컬럼 표 (sticky 인덱스, 인라인 편집, 하이라이트, 번역 버튼)
+- **타입**: `SheetData { name: string; rows: StringRow[] }` 추가
 - **홈 페이지** (`src/app/page.tsx`): 스트링 체크 도구 카드 추가 (기존 도구 목록에 추가)
 
 ### Release Strategy

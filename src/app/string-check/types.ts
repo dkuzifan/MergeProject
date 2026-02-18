@@ -24,3 +24,8 @@ export const LANG_MAP = [
 ] as const
 
 export type LangEntry = (typeof LANG_MAP)[number]
+
+export interface SheetData {
+  name: string
+  rows: StringRow[]
+}
