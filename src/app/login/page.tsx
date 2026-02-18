@@ -40,19 +40,24 @@ export default function LoginPage() {
     setErrorMsg('')
     setState('checking')
 
-    const res = await fetch('/api/auth/check-user', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    })
-    const data = await res.json()
+    try {
+      const res = await fetch('/api/auth/check-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const data = await res.json()
 
-    if (data.exists && data.hasPin) {
-      // 재방문 유저 → PIN 입력 화면
-      setState('pin_input')
-    } else {
-      // 신규 유저 or PIN 미설정 → Magic Link 발송
-      await sendMagicLink()
+      if (data.exists && data.hasPin) {
+        // 재방문 유저 → PIN 입력 화면
+        setState('pin_input')
+      } else {
+        // 신규 유저 or PIN 미설정 → Magic Link 발송
+        await sendMagicLink()
+      }
+    } catch {
+      setErrorMsg('서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
+      setState('email_input')
     }
   }
 
@@ -82,37 +87,43 @@ export default function LoginPage() {
     setErrorMsg('')
     setState('checking')
 
-    const res = await fetch('/api/auth/verify-pin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, pin }),
-    })
-    const data = await res.json()
+    try {
+      const res = await fetch('/api/auth/verify-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, pin }),
+      })
+      const data = await res.json()
 
-    if (!res.ok) {
-      setErrorMsg(data.error || 'PIN이 올바르지 않습니다')
+      if (!res.ok) {
+        setErrorMsg(data.error || 'PIN이 올바르지 않습니다')
+        setState('pin_input')
+        setPin('')
+        return
+      }
+
+      // 서버에서 받은 token으로 세션 생성
+      const supabase = createClient()
+      const { error: sessionError } = await supabase.auth.verifyOtp({
+        email,
+        token: data.token,
+        type: 'email',
+      })
+
+      if (sessionError) {
+        setErrorMsg('로그인에 실패했습니다. 다시 시도해주세요.')
+        setState('pin_input')
+        setPin('')
+        return
+      }
+
+      router.push('/')
+      router.refresh()
+    } catch {
+      setErrorMsg('서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
       setState('pin_input')
       setPin('')
-      return
     }
-
-    // 서버에서 받은 token으로 세션 생성
-    const supabase = createClient()
-    const { error: sessionError } = await supabase.auth.verifyOtp({
-      email,
-      token: data.token,
-      type: 'email',
-    })
-
-    if (sessionError) {
-      setErrorMsg('로그인에 실패했습니다. 다시 시도해주세요.')
-      setState('pin_input')
-      setPin('')
-      return
-    }
-
-    router.push('/')
-    router.refresh()
   }
 
   // ── 2b단계: Magic Link 인증 후 PIN 최초 설정 ────────────────────
@@ -123,21 +134,26 @@ export default function LoginPage() {
     setErrorMsg('')
     setState('checking')
 
-    const res = await fetch('/api/auth/set-pin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin }),
-    })
-    const data = await res.json()
+    try {
+      const res = await fetch('/api/auth/set-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin }),
+      })
+      const data = await res.json()
 
-    if (!res.ok) {
-      setErrorMsg(data.error || 'PIN 저장에 실패했습니다')
+      if (!res.ok) {
+        setErrorMsg(data.error || 'PIN 저장에 실패했습니다')
+        setState('pin_setup')
+        return
+      }
+
+      router.push('/')
+      router.refresh()
+    } catch {
+      setErrorMsg('서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
       setState('pin_setup')
-      return
     }
-
-    router.push('/')
-    router.refresh()
   }
 
   // ── UI 렌더링 ───────────────────────────────────────────────────

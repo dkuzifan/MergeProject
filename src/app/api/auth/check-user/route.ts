@@ -1,5 +1,5 @@
 // 이메일이 등록된 유저인지 확인하는 API
-// 반환: { exists: boolean } — exists=true면 PIN 입력 화면으로, false면 Magic Link 발송
+// Supabase SQL 함수(check_user_login_status)로 auth.users + user_pins 동시 조회
 import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse, type NextRequest } from 'next/server'
 
@@ -12,24 +12,14 @@ export async function POST(request: NextRequest) {
 
   const supabase = createAdminClient()
 
-  // auth.users에서 해당 이메일 유저 조회
-  const { data, error } = await supabase.auth.admin.listUsers()
+  const { data, error } = await supabase.rpc('check_user_login_status', {
+    p_email: email,
+  })
+
   if (error) {
+    console.error('[check-user] rpc error:', error)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 
-  const user = data.users.find((u) => u.email === email)
-
-  if (!user) {
-    return NextResponse.json({ exists: false })
-  }
-
-  // user_pins 테이블에 PIN이 저장되어 있는지 확인
-  const { data: pinData } = await supabase
-    .from('user_pins')
-    .select('user_id')
-    .eq('user_id', user.id)
-    .single()
-
-  return NextResponse.json({ exists: true, hasPin: !!pinData })
+  return NextResponse.json(data)
 }
