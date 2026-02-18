@@ -13,27 +13,25 @@ export async function POST(request: NextRequest) {
 
   const admin = createAdminClient()
 
-  // 1. 유저 조회
-  const { data: usersData, error: userError } = await admin.auth.admin.listUsers()
-  if (userError) {
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
-  }
+  // 1. 이메일로 user_id 조회 (RPC)
+  const { data: userId, error: rpcError } = await admin.rpc('get_user_id_by_email', {
+    p_email: email,
+  })
 
-  const user = usersData.users.find((u) => u.email === email)
-  if (!user) {
+  if (rpcError || !userId) {
     return NextResponse.json({ error: '등록되지 않은 이메일입니다' }, { status: 404 })
   }
 
   // 2. PIN 해시 검증
   const pinHash = crypto
-    .createHmac('sha256', user.id)
+    .createHmac('sha256', userId)
     .update(pin)
     .digest('hex')
 
   const { data: pinData } = await admin
     .from('user_pins')
     .select('pin_hash')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .single()
 
   if (!pinData || pinData.pin_hash !== pinHash) {
