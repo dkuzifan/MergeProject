@@ -2,8 +2,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import Navbar from "@/components/Navbar";
-import Providers from "@/components/Providers"; // 1. 포장지 가져오기
+import Providers from "@/components/Providers";
+import AppShell from "@/components/AppShell";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -19,14 +19,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      {/* ▼ 여기 className을 수정하세요! ▼ */}
       <body className={`${inter.className} bg-white dark:bg-gray-900 text-black dark:text-white`}>
         <Providers>
-          <Navbar />
-          <main className="p-4">{children}</main>
-          <footer className="p-4 bg-gray-100 dark:bg-gray-900 text-center text-xs text-gray-500 mt-10">
-            © 2025 My First Next.js App
-          </footer>
+          <AppShell>{children}</AppShell>
         </Providers>
       </body>
     </html>

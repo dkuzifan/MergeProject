@@ -1,9 +1,37 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import ThemeToggle from "./ThemeToggle";
+import { createClient } from "@/utils/supabase/client";
 
 export default function Navbar() {
+  const router = useRouter()
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+
+  useEffect(() => {
+    const supabase = createClient()
+
+    // 초기 세션 조회
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUserEmail(user?.email ?? null)
+    })
+
+    // 실시간 인증 상태 동기화
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserEmail(session?.user?.email ?? null)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  async function handleLogout() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
   return (
     <nav className="relative z-50 p-4 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md text-black dark:text-white flex justify-between items-center transition-all duration-300">
       
@@ -78,8 +106,21 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* [우측 그룹] 다크모드 토글 */}
-      <div>
+      {/* [우측 그룹] 사용자 이메일 + 로그아웃 + 다크모드 토글 */}
+      <div className="flex items-center gap-3">
+        {userEmail && (
+          <>
+            <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-full max-w-[200px] truncate">
+              {userEmail}
+            </span>
+            <button
+              onClick={handleLogout}
+              className="text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            >
+              로그아웃
+            </button>
+          </>
+        )}
         <ThemeToggle />
       </div>
       
