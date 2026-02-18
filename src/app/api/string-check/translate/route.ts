@@ -2,7 +2,7 @@ import { createClient } from '@/utils/supabase/server'
 import { NextResponse, type NextRequest } from 'next/server'
 
 // ─── 설정 (모델/제한 변경 시 여기만 수정) ───────────────────────────────
-const GEMINI_MODEL = 'gemini-3-pro'       // 모델 변경: gemini-2.5-pro, gemini-2.0-flash 등
+const GEMINI_MODEL = 'gemini-3-pro-preview'  // 모델 변경: gemini-2.5-pro, gemini-2.5-flash 등
 const MAX_CHARS_PER_REQUEST = 2000         // 요청당 최대 글자 수 (비용 제한)
 // ────────────────────────────────────────────────────────────────────────
 
@@ -59,10 +59,13 @@ Return JSON with these exact keys: ${JSON.stringify(emptySchema)}`
     })
 
     if (!res.ok) {
-      const errData = await res.json().catch(() => ({}))
-      console.error('Gemini API error:', res.status, errData)
+      const errText = await res.text().catch(() => '')
+      console.error(`Gemini API error [${res.status}]:`, errText)
       const status = res.status === 429 ? 429 : 502
-      return NextResponse.json({ error: 'Translation API failed' }, { status })
+      return NextResponse.json(
+        { error: 'Translation API failed', detail: `Gemini ${res.status}` },
+        { status },
+      )
     }
 
     const data = await res.json()
