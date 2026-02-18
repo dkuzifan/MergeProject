@@ -38,9 +38,12 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  // 인증됨 + /login 접근 → / 로 리디렉션
+  // 인증됨 + /login 접근 → / 로 리디렉션 (PIN 설정 중이면 예외)
   if (user && pathname === '/login') {
-    return NextResponse.redirect(new URL('/', request.url))
+    const setup = request.nextUrl.searchParams.get('setup')
+    if (setup !== 'pin') {
+      return NextResponse.redirect(new URL('/', request.url))
+    }
   }
 
   // 미인증 + /login 이외 경로 → /login 으로 리디렉션
