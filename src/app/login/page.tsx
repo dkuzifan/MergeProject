@@ -226,7 +226,7 @@ export default function LoginPage() {
                 value={pin}
                 onChange={(e) => { setPin(e.target.value.replace(/\D/g, '')); setErrorMsg('') }}
                 placeholder="••••"
-                className={`w-full px-3.5 py-2.5 border-[1.5px] rounded-xl text-sm text-center tracking-widest outline-none transition-colors bg-gray-50 text-xl
+                className={`w-full px-3.5 py-2.5 border-[1.5px] rounded-xl text-sm text-center tracking-widest outline-none transition-colors bg-gray-50 text-xl text-gray-900
                   ${errorMsg ? 'border-red-400 bg-red-50' : 'border-gray-200 focus:border-blue-500 focus:bg-white'}`}
               />
               {errorMsg && (
@@ -281,7 +281,7 @@ export default function LoginPage() {
                 onChange={(e) => { setPin(e.target.value.replace(/\D/g, '')); setErrorMsg('') }}
                 placeholder="••••"
                 autoFocus
-                className={`w-full px-3.5 py-2.5 border-[1.5px] rounded-xl text-sm text-center tracking-widest outline-none transition-colors bg-gray-50 text-xl
+                className={`w-full px-3.5 py-2.5 border-[1.5px] rounded-xl text-sm text-center tracking-widest outline-none transition-colors bg-gray-50 text-xl text-gray-900
                   ${errorMsg ? 'border-red-400 bg-red-50' : 'border-gray-200 focus:border-blue-500 focus:bg-white'}`}
               />
               {errorMsg && (
@@ -335,7 +335,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => { setEmail(e.target.value); setErrorMsg('') }}
               placeholder="name@storytaco.com"
-              className={`w-full px-3.5 py-2.5 border-[1.5px] rounded-xl text-sm outline-none transition-colors bg-gray-50
+              className={`w-full px-3.5 py-2.5 border-[1.5px] rounded-xl text-sm text-gray-900 outline-none transition-colors bg-gray-50
                 ${errorMsg ? 'border-red-400 bg-red-50' : 'border-gray-200 focus:border-blue-500 focus:bg-white'}`}
             />
             {errorMsg && (
