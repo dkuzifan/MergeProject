@@ -53,7 +53,7 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // /auth/callback, _next 정적 파일, favicon 은 게이트 제외
-    '/((?!auth/callback|_next/static|_next/image|favicon.ico).*)',
+    // /api/auth/*, /auth/callback, _next 정적 파일, favicon 은 게이트 제외
+    '/((?!api/auth|auth/callback|_next/static|_next/image|favicon.ico).*)',
   ],
 }
