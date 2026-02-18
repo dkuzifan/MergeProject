@@ -101,11 +101,11 @@ export default function Navbar() {
             </div>
           </div>
 
-          {/* === [신규] pAI 드롭다운 === */}
+          {/* === pAI 드롭다운 === */}
           <div className="relative group py-4">
-            <Link href="/pAI" className="relative z-10 text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 font-bold text-xl transition duration-300">
+            <span className="relative z-10 text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 font-bold text-xl transition duration-300 cursor-default">
               pAI
-            </Link>
+            </span>
             
             <div className="absolute top-full left-0 pt-4 w-48 hidden group-hover:block animation-fade-in">
               <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border border-white/40 dark:border-gray-700/50 rounded-2xl shadow-2xl overflow-hidden ring-1 ring-black/5">
