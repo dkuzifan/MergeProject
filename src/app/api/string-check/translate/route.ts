@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 // ─── 설정 (모델/제한 변경 시 여기만 수정) ───────────────────────────────
 const GEMINI_MODEL = 'gemini-2.5-pro'     // 모델 변경: gemini-2.0-flash, gemini-1.5-flash 등
-const MAX_CHARS_PER_REQUEST = 500          // 요청당 최대 글자 수 (비용 제한)
+const MAX_CHARS_PER_REQUEST = 2000         // 요청당 최대 글자 수 (비용 제한)
 // ────────────────────────────────────────────────────────────────────────
 
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`

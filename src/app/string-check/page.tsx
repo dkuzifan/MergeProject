@@ -56,8 +56,8 @@ export default function StringCheckPage() {
 
     const korText = row.cells[0]
 
-    if (korText.length > 500) {
-      alert(`한국어 텍스트가 500자를 초과합니다 (${korText.length}자). 번역을 진행할 수 없습니다.`)
+    if (korText.length > 2000) {
+      alert(`한국어 텍스트가 2,000자를 초과합니다 (${korText.length}자). 번역을 진행할 수 없습니다.`)
       return
     }
 
