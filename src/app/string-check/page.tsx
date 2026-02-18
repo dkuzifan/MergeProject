@@ -167,6 +167,12 @@ export default function StringCheckPage() {
     }
   }
 
+  async function translateSelected(rowIndices: string[]) {
+    for (const rowIndex of rowIndices) {
+      await translateRow(activeSheetName, rowIndex)
+    }
+  }
+
   async function translateAll() {
     const sheetRows = getSheetRows(activeSheetName)
     const translatableRows = sheetRows.filter(
@@ -311,10 +317,12 @@ export default function StringCheckPage() {
 
       {/* 문자열 테이블 */}
       <StringTable
+        key={activeSheetName}
         rows={activeRows}
         translatingRows={activeTranslatingRows}
         onTranslateRow={(index) => translateRow(activeSheetName, index)}
         onTranslateAll={translateAll}
+        onTranslateSelected={translateSelected}
         onCellEdit={handleCellEdit}
       />
     </div>

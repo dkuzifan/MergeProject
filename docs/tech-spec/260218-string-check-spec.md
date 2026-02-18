@@ -18,13 +18,14 @@ status: draft
 | DB 사용 | Supabase | ⛔ 이 기능은 DB 사용 없음 (브라우저 내 처리) |
 | xlsx | ❌ 미설치 | 🔧 `xlsx` (SheetJS) 신규 설치 필요 |
 | 언어 감지 | ❌ 미설치 | 🔧 `tinyld` 신규 설치 필요 |
-| 번역 | ❌ 미설치 | 🔧 Google Translate REST API (서버 프록시 경유) |
+| 번역 | ❌ 미설치 | 🔧 Gemini REST API (서버 프록시 경유, 게임 문맥 반영 번역) |
 
 ### API
 
 - **신규**: `POST /api/string-check/translate`
-  - Google Translate API 키를 서버에서만 보관하기 위한 프록시 라우트
-  - 클라이언트에서 번역 요청 → 서버가 Google API 호출 → 결과 반환
+  - Gemini API 키를 서버에서만 보관하기 위한 프록시 라우트
+  - 클라이언트에서 번역 요청 → 서버가 Gemini API 호출 → 결과 반환
+  - 1회 API 호출로 9개 언어 번역 동시 처리 (게임 용어·맥락 반영 시스템 프롬프트 적용)
   - 클라이언트에 API 키 노출 없음
 - **기존 API 변경 없음** (auth API 등 그대로)
 
@@ -56,14 +57,19 @@ status: draft
 - **신규 컴포넌트** (`src/app/string-check/components/`):
   - `UploadScreen.tsx` — 드래그&드롭 업로드 UI, 전체 시트 파싱 후 유효 시트만 전달
   - `SummaryPanel.tsx` — 오류/경고 요약 패널 (행 그룹 + 토글 + index 스크롤)
-  - `StringTable.tsx` — 11컬럼 표 (sticky 인덱스, 인라인 편집, 하이라이트, 번역 버튼)
+  - `StringTable.tsx` — 11컬럼 표 (sticky 인덱스, 인라인 편집, 하이라이트, 체크박스 선택, 번역 버튼)
+    - Props: `selectedRows` 내부 state, `onTranslateSelected(rowIndices: string[])` 콜백
+    - 번역 대상 행에 체크박스 표시, 헤더에 전체선택 체크박스(indeterminate 지원)
+    - 선택된 행 초록 배경 하이라이트
+    - 1개 이상 선택 시 툴바에 "선택 번역 (N행)" 버튼(emerald) 표시
+    - 시트 전환 시 선택 초기화: `key={activeSheetName}`으로 컴포넌트 리마운트
 - **타입**: `SheetData { name: string; rows: StringRow[] }` 추가
 - **홈 페이지** (`src/app/page.tsx`): 스트링 체크 도구 카드 추가 (기존 도구 목록에 추가)
 
 ### Release Strategy
 
 - DB 변경 없음 → 배포 즉시 롤백 가능
-- Google Translate API 키는 Vercel 환경 변수(`GOOGLE_TRANSLATE_API_KEY`)에만 저장
+- Gemini API 키는 Vercel 환경 변수(`GEMINI_API_KEY`)에만 저장
 - `/string-check` 라우트는 인증 게이트로 자동 보호 (proxy.ts)
 - 기존 기능에 영향 없음 → 독립 배포 가능
 
@@ -99,7 +105,7 @@ npm install xlsx tinyld
 
 수정:
   src/app/page.tsx                   # 홈에 스트링 체크 카드 추가
-  .env.local                         # GOOGLE_TRANSLATE_API_KEY 추가
+  .env.local                         # GEMINI_API_KEY 추가
   package.json                       # xlsx, tinyld 추가
 ```
 
@@ -108,9 +114,8 @@ npm install xlsx tinyld
 ## Plan (Implementation Checklist)
 
 **P1: 환경 설정** ← 이후 모든 Phase의 선행 조건
-- [ ] Google Cloud Console에서 Translation API 활성화 + API 키 발급
-- [ ] GCP Console > Translation API > Quotas에서 월 500,000자 하드 쿼터 설정
-- [ ] `GOOGLE_TRANSLATE_API_KEY`를 `.env.local`과 Vercel 환경 변수에 등록
+- [ ] Google AI Studio에서 Gemini API 키 발급
+- [ ] `GEMINI_API_KEY`를 `.env.local`과 Vercel 환경 변수에 등록
 - [ ] `xlsx`, `tinyld` 패키지 설치 (`npm install xlsx tinyld`)
 - [ ] `src/app/string-check/page.tsx` 빈 shell 생성, `src/app/page.tsx`에 도구 카드 추가
 
@@ -141,9 +146,10 @@ npm install xlsx tinyld
 - [ ] ✅ **검증**: curl 또는 브라우저 DevTools로 API 직접 호출해 정상 응답 확인
 
 **P4-B: 번역 클라이언트 연결** ← P2 + P4-A 완료 후
-- [ ] 한국어만 있는 행 판별 로직 — Action Bar 번역 버튼·행 우측 [번역] 버튼 표시 조건
+- [ ] 한국어만 있는 행 판별 로직 — 행 우측 [번역] 버튼 + 체크박스 표시 조건
 - [ ] `findExistingTranslations()` 구현 — 번역 전 동일 한국어 원문 행 검색, 재사용 가능한 언어 추출
 - [ ] 행 단위 [번역] 버튼 — 내부 재사용 먼저 적용 후, 남은 언어만 API 호출하여 빈 셀 채움
+- [ ] 체크박스 선택 번역 — 번역 대상 행에 체크박스, 헤더 전체선택(indeterminate), 선택 시 초록 "선택 번역 (N행)" 버튼
 - [ ] [전체 번역] 버튼 클릭 시 예상 문자 수 표시 (재사용 제외 후 실제 API 호출 예정 문자 수) + 사용자 확인 → 순차 처리
 - [ ] 번역 진행 중 상태 표시 (진행 중인 셀 파란 배경, 진행률 표시)
 - [ ] 번역 실패 셀 — 오렌지 테두리 + "번역 실패" 텍스트, 클릭 시 재시도
@@ -199,10 +205,13 @@ npm install xlsx tinyld
 | T1 | 행 번역 | 한국어만 있는 행의 [번역] 버튼 클릭 | 빈 9개 셀에 번역 결과 채워짐, 감지 결과 재계산 |
 | T2 | 내부 재사용 — 전체 일치 | 동일 한국어 원문이 다른 행에 번역 완료된 상태에서 [번역] 클릭 | API 호출 없이 즉시 번역 결과 채워짐 |
 | T3 | 내부 재사용 — 부분 일치 | 동일 한국어 원문 행에 일부 언어(예: 영어·일본어)만 번역된 경우 | 영어·일본어는 재사용, 나머지 7개 언어만 API 호출 |
-| T4 | 전체 번역 확인 UI | [전체 번역] 버튼 클릭 | 재사용 후 실제 API 호출 예정 문자 수 표시 + 확인/취소 선택지 노출 |
-| T5 | 전체 번역 진행 | 전체 번역 확인 후 진행 | 행 순차 처리, 진행 중인 행 파란 배경, 완료 행 정상 표시 |
-| T6 | 번역 실패 | API 오류 발생 (네트워크 차단 등) | 해당 셀 오렌지 테두리 + "번역 실패" 표시 |
-| T7 | 재시도 | 번역 실패 셀 클릭 | 해당 셀만 재번역 시도 (재사용 탐지 후 API 호출) |
+| T4 | 선택 번역 | 체크박스로 2개 행 선택 후 "선택 번역" 클릭 | 선택된 행만 번역, 선택 해제됨, 나머지 행 유지 |
+| T5 | 선택 전체 | 헤더 체크박스 클릭 | 번역 대상 전체 선택, 재클릭 시 전체 해제 |
+| T6 | 탭 전환 선택 초기화 | 행 선택 후 다른 시트 탭 클릭 | 선택 상태 초기화됨 |
+| T7 | 전체 번역 확인 UI | [전체 번역] 버튼 클릭 | 재사용 후 실제 API 호출 예정 문자 수 표시 + 확인/취소 선택지 노출 |
+| T8 | 전체 번역 진행 | 전체 번역 확인 후 진행 | 행 순차 처리, 진행 중인 행 파란 배경, 완료 행 정상 표시 |
+| T9 | 번역 실패 | API 오류 발생 (네트워크 차단 등) | 해당 셀 오렌지 테두리 + "번역 실패" 표시 |
+| T10 | 재시도 | 번역 실패 셀 클릭 | 해당 셀만 재번역 시도 (재사용 탐지 후 API 호출) |
 
 **편집 및 다운로드**
 
@@ -472,7 +481,7 @@ detectIssues(rows: StringRow[]):
 
 ### POST `/api/string-check/translate`
 
-번역 대상 텍스트를 받아 Google Translate API를 경유해 번역 결과를 반환한다.
+번역 대상 텍스트를 받아 Gemini API를 경유해 번역 결과를 반환한다.
 
 - **Permission**: 로그인 세션 필요 (Supabase 세션 검증)
 - **Request Body**:
@@ -499,10 +508,10 @@ detectIssues(rows: StringRow[]):
 }
 ```
 - **Response (400)**: `{ "error": "Invalid input" }`
-- **Response (413)**: `{ "error": "Text too long", "maxChars": 500 }` (요청당 문자 수 초과)
-- **Response (502)**: `{ "error": "Translation API failed" }` (Google API 오류 시)
+- **Response (413)**: `{ "error": "Text too long", "maxChars": 2000 }` (요청당 문자 수 초과)
+- **Response (502)**: `{ "error": "Translation API failed" }` (Gemini API 오류 시)
 
-> **Google Translate API v2 호출 방식**: v2는 `target`이 하나만 허용됨. 9개 언어를 `Promise.all`로 병렬 요청 처리. 응답 중 일부만 실패해도 성공한 언어는 셀에 채우고, 실패한 언어만 오류 표시.
+> **Gemini API 호출 방식**: 단일 요청으로 9개 언어를 동시 번역. `responseMimeType: 'application/json'`으로 안정적인 JSON 파싱. `temperature: 0.1`로 일관된 번역 품질 유지. 게임 로컬라이제이션 시스템 프롬프트로 게임 용어·맥락·길이 축약 반영.
 
 ---
 
@@ -510,28 +519,23 @@ detectIssues(rows: StringRow[]):
 
 ### 과금 방식 확인
 
-Google Translate API v2(Basic)는 **API 호출 시 번역한 문자 수**에 대해서만 과금된다.
+Gemini API는 **토큰 수**에 대해 과금된다. 무료 티어(Free Tier)와 유료 티어가 존재.
 
-| 구간 | 비용 |
-|------|------|
-| 월 500,000자 이하 | **무료** (영구, 만료 없음) |
-| 초과 시 | $20 / 백만자 |
+| 모델 | 무료 티어 | 유료 과금 |
+|------|----------|----------|
+| gemini-2.5-pro 이상 | 분당/일당 요청 제한 | 입력 $1.25~$2.50 / 백만 토큰 |
 
-파일 업로드·파싱·표 렌더링·편집은 브라우저 내 처리이므로 **비용 없음**. 번역 API 버튼 클릭 시에만 과금된다.
+파일 업로드·파싱·표 렌더링·편집은 브라우저 내 처리이므로 **비용 없음**. 번역 버튼 클릭 시에만 토큰 소비.
 
-### 500,000자/월 한도 적용 전략
+### 비용 제한 전략
 
-**1차 방어 — GCP Console 하드 쿼터 (가장 확실)**
-
-Google Cloud Console > APIs & Services > Translation API > Quotas 에서 월 문자 수를 500,000으로 설정. 한도 초과 시 Google이 자동으로 `429 RESOURCE_EXHAUSTED` 반환, 추가 비용 발생 없음. 코드 변경 없이 인프라 레벨에서 차단.
-
-**2차 방어 — API Route 요청당 문자 수 제한**
+**1차 방어 — API Route 요청당 문자 수 제한**
 
 단일 번역 요청이 지나치게 크지 않도록 서버에서 사전 차단.
 
 ```typescript
 // /api/string-check/translate/route.ts
-const MAX_CHARS_PER_REQUEST = 500  // 한 셀 텍스트 최대 500자
+const MAX_CHARS_PER_REQUEST = 2000  // 한 셀 텍스트 최대 2,000자
 // (게임 UI 문자열 특성상 이 이상은 비정상 요청)
 
 if (text.length > MAX_CHARS_PER_REQUEST) {
@@ -542,27 +546,30 @@ if (text.length > MAX_CHARS_PER_REQUEST) {
 }
 ```
 
-**3차 방어 — 전체 번역 전 사용자 확인 UI**
+**2차 방어 — 전체 번역 전 사용자 확인 UI**
 
 `[전체 번역]` 버튼 클릭 시, 번역 API 호출 전에 예상 문자 수를 계산해 사용자에게 표시:
 
 ```
-번역 대상: 34행 × 평균 15자 × 9언어 = 약 4,590자
+번역 대상: 34행 × 평균 15자
 [확인 후 번역 시작]  [취소]
 ```
 
-사용자가 직접 규모를 인지하고 진행 여부를 결정.
+> `[선택 번역]`은 사용자가 명시적으로 선택한 항목이므로 확인 다이얼로그 생략.
+
+**3차 방어 — Google AI Studio 사용량 모니터링**
+
+Google AI Studio 대시보드에서 일별 토큰 사용량 확인. 필요 시 API 키 재발급으로 초과 차단.
 
 ### 비용 시뮬레이션
 
-| 시나리오 | 번역 문자 수 | 비용 |
-|----------|------------|------|
-| 소규모 파일 100행 전체 번역 (중복 없음) | 100 × 15 × 9 = 13,500자 | 무료 |
-| 대규모 파일 500행 전체 번역 (중복 없음) | 500 × 15 × 9 = 67,500자 | 무료 |
-| 대규모 파일 500행 (중복 30% 가정) | 67,500 × 0.7 = 47,250자 | 무료 |
-| 팀원 5명이 매일 전체 번역 × 20일 (중복 없음) | 67,500 × 5 × 20 = 6,750,000자 | 약 $125 |
+| 시나리오 | 입력 토큰 (추정) | 비용 |
+|----------|----------------|------|
+| 100행 전체 번역 (평균 15자) | ~15,000 토큰 | 무료 티어 |
+| 500행 전체 번역 (중복 없음) | ~75,000 토큰 | 무료 티어 또는 $0.09 |
+| 팀원 5명 × 매일 전체 번역 × 20일 | ~7,500,000 토큰 | 약 $9.4 |
 
-→ 내부 재사용으로 실제 API 호출 문자 수 감소. GCP 하드 쿼터로 초과 차단.
+→ 내부 재사용(findExistingTranslations)으로 실제 API 호출 횟수 절감. 선택 번역으로 불필요한 전체 번역 방지.
 
 ---
 
@@ -572,7 +579,7 @@ if (text.length > MAX_CHARS_PER_REQUEST) {
 |--------|----------|------|
 | **언어 감지 오탐** | 짧은 UI 문자열(5자 미만)이나 공용 외래어에서 오탐 | **3중 필터** 적용: ① 공용 외래어 우선 분류 후 언어 오류 제외 ② 5자 미만 건너뜀 ③ 감지 불가(`undefined`) 시 오류 미표시 |
 | **ESM 빌드 오류** | ~~franc-min ESM 충돌~~ | **tinyld로 교체하여 리스크 제거** — tinyld는 CJS+ESM 모두 지원 |
-| **번역 비용 초과** | 팀원 전원이 대규모 파일을 매일 반복 번역 | **3중 방어**: ① GCP Console 월 500,000자 하드 쿼터 ② API Route 요청당 500자 제한 ③ 전체 번역 전 예상 문자 수 사용자 확인 UI |
+| **번역 비용 초과** | 팀원 전원이 대규모 파일을 매일 반복 번역 | **3중 방어**: ① API Route 요청당 2,000자 제한 ② 전체 번역 전 예상 문자 수 사용자 확인 UI ③ 선택 번역으로 필요한 행만 처리 |
 | **xlsx 파일 구조 불일치** | 헤더가 4행 이외 위치이거나 컬럼 순서가 다른 파일 | 파싱 전 row[3] 존재·11컬럼 이상 여부 검증 + 명확한 오류 메시지 표시 |
 | **대용량 파일 성능** | 1000행 초과 xlsx 업로드 시 감지 지연 | PRD 기준(1000행 3초)만 보장. 초과 시 경고 메시지 표시 |
 
@@ -580,4 +587,4 @@ if (text.length > MAX_CHARS_PER_REQUEST) {
 
 **관찰 포인트**:
 - Vercel 함수 로그에서 `/api/string-check/translate` 413·502 오류율 모니터링
-- Google Cloud Console Translation API 대시보드에서 월별 문자 수 사용량 확인
+- Google AI Studio 대시보드에서 `GEMINI_API_KEY` 토큰 사용량 확인
