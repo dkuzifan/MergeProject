@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 
@@ -14,21 +14,17 @@ type State = 'email_input' | 'checking' | 'pin_input' | 'magic_sent' | 'pin_setu
 
 export default function LoginPage() {
   const router = useRouter()
-  const [state, setState] = useState<State>(() => {
-    if (typeof window === 'undefined') return 'email_input'
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('setup') === 'pin') return 'pin_setup'
-    return 'email_input'
-  })
+  const [state, setState] = useState<State>('email_input')
   const [email, setEmail] = useState('')
   const [pin, setPin] = useState('')
-  const [errorMsg, setErrorMsg] = useState(() => {
-    if (typeof window === 'undefined') return ''
+  const [errorMsg, setErrorMsg] = useState('')
+
+  // hydration 이후 URL 파라미터로 초기 상태 설정
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    return params.get('error') === 'expired'
-      ? '인증 링크가 만료되었습니다. 다시 시도해주세요.'
-      : ''
-  })
+    if (params.get('setup') === 'pin') setState('pin_setup')
+    if (params.get('error') === 'expired') setErrorMsg('인증 링크가 만료되었습니다. 다시 시도해주세요.')
+  }, [])
 
   // ── 1단계: 이메일 제출 → 신규/재방문 분기 ──────────────────────
   async function handleEmailSubmit(e: React.FormEvent) {
@@ -105,8 +101,7 @@ export default function LoginPage() {
       // 서버에서 받은 token으로 세션 생성
       const supabase = createClient()
       const { error: sessionError } = await supabase.auth.verifyOtp({
-        email,
-        token: data.token,
+        token_hash: data.token,
         type: 'magiclink',
       })
 
