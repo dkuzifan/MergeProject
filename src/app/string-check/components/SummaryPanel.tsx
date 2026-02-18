@@ -74,9 +74,10 @@ export default function SummaryPanel({ rows, onScrollToRow }: Props) {
       const id = `${prefix}-${group.index}`
       const isExpanded = expandedGroups.has(id)
       return (
-        <li key={id} className="rounded-md overflow-hidden">
+        <li key={id}>
+          {/* 고정 높이 행: h-8 = 32px, 태그 overflow-hidden으로 1줄 유지 */}
           <div
-            className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            className="flex items-center gap-2 px-2 h-8 rounded-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             onClick={() => toggleGroup(id)}
           >
             <button
@@ -86,22 +87,24 @@ export default function SummaryPanel({ rows, onScrollToRow }: Props) {
             >
               {group.index}
             </button>
-            <div className="flex flex-wrap gap-1 flex-1 min-w-0">
+            {/* overflow-hidden으로 태그 줄바꿈 방지 */}
+            <div className="flex items-center gap-1 flex-1 min-w-0 overflow-hidden">
               {group.items.map((item) => (
-                <span key={item.colIdx} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${tagClass}`}>
+                <span key={item.colIdx} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${tagClass}`}>
                   {item.label}
                 </span>
               ))}
             </div>
             <span className={`text-[10px] text-gray-400 flex-shrink-0 transition-transform duration-150 ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
           </div>
+          {/* 토글 확장 영역 */}
           {isExpanded && (
-            <div className="flex flex-col gap-0.5 pb-1.5 pl-7">
+            <div className="flex flex-col pl-7 pb-1">
               {group.items.map((item) => (
-                <div key={item.colIdx} className="flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400">
-                  <span className="text-gray-300">└</span>
+                <div key={item.colIdx} className="flex items-center gap-2 h-5 text-[11px] text-gray-500 dark:text-gray-400">
+                  <span className="text-gray-300 flex-shrink-0">└</span>
                   <span className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotClass}`} />
-                  <span>{item.label} — {getDetail(group.index, item.colIdx)}</span>
+                  <span className="truncate">{item.label} — {getDetail(group.index, item.colIdx)}</span>
                 </div>
               ))}
             </div>
@@ -112,9 +115,9 @@ export default function SummaryPanel({ rows, onScrollToRow }: Props) {
   }
 
   return (
-    <div className="flex gap-3 overflow-x-auto px-6 py-3 bg-gray-50 dark:bg-gray-950 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 h-56">
+    <div className="flex gap-3 overflow-x-auto px-6 py-3 bg-gray-50 dark:bg-gray-950 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
       {/* 🔴 수정 필요 */}
-      <div className="min-w-[220px] flex-1 flex flex-col bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm">
+      <div className="min-w-[220px] flex-1 h-48 flex flex-col bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm">
         <div className="flex items-center gap-2 mb-2 font-semibold text-sm text-gray-800 dark:text-white flex-shrink-0">
           🔴 수정 필요
           <span className="bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700 rounded-full px-2 py-0.5 text-xs font-bold">
@@ -124,7 +127,7 @@ export default function SummaryPanel({ rows, onScrollToRow }: Props) {
         {errorGroups.length === 0 ? (
           <p className="text-xs text-gray-400 dark:text-gray-500 pl-1">수정 필요 항목 없음</p>
         ) : (
-          <ul className="flex flex-col gap-0.5 flex-1 overflow-y-auto min-h-0">
+          <ul className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-0.5">
             {renderGroupList(
               errorGroups,
               'err',
@@ -143,7 +146,7 @@ export default function SummaryPanel({ rows, onScrollToRow }: Props) {
       </div>
 
       {/* 🟡 경고 */}
-      <div className="min-w-[220px] flex-1 flex flex-col bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm">
+      <div className="min-w-[220px] flex-1 h-48 flex flex-col bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm">
         <div className="flex items-center gap-2 mb-2 font-semibold text-sm text-gray-800 dark:text-white flex-shrink-0">
           🟡 경고
           <span className="bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-700 rounded-full px-2 py-0.5 text-xs font-bold">
@@ -153,7 +156,7 @@ export default function SummaryPanel({ rows, onScrollToRow }: Props) {
         {warningGroups.length === 0 ? (
           <p className="text-xs text-gray-400 dark:text-gray-500 pl-1">경고 항목 없음</p>
         ) : (
-          <ul className="flex flex-col gap-0.5 flex-1 overflow-y-auto min-h-0">
+          <ul className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-0.5">
             {renderGroupList(
               warningGroups,
               'warn',
@@ -171,7 +174,7 @@ export default function SummaryPanel({ rows, onScrollToRow }: Props) {
       </div>
 
       {/* 🔵 번역 대상 */}
-      <div className="min-w-[220px] flex-1 flex flex-col bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm">
+      <div className="min-w-[220px] flex-1 h-48 flex flex-col bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm">
         <div className="flex items-center gap-2 mb-2 font-semibold text-sm text-gray-800 dark:text-white flex-shrink-0">
           🔵 번역 대상
           <span className="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700 rounded-full px-2 py-0.5 text-xs font-bold">
@@ -181,7 +184,7 @@ export default function SummaryPanel({ rows, onScrollToRow }: Props) {
         {translateGroups.length === 0 ? (
           <p className="text-xs text-gray-400 dark:text-gray-500 pl-1">번역 대상 없음</p>
         ) : (
-          <ul className="flex flex-col gap-0.5 flex-1 overflow-y-auto min-h-0">
+          <ul className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-0.5">
             {renderGroupList(
               translateGroups,
               'trans',
@@ -195,7 +198,7 @@ export default function SummaryPanel({ rows, onScrollToRow }: Props) {
 
       {/* 📊 현황 */}
       <div className="w-44 flex-shrink-0 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm">
-        <div className="mb-2 font-semibold text-sm text-gray-800 dark:text-white flex-shrink-0">📊 현황</div>
+        <div className="mb-2 font-semibold text-sm text-gray-800 dark:text-white">📊 현황</div>
         <div className="flex flex-col gap-2 text-xs">
           {[
             { label: '전체 행', value: rows.length, color: 'text-gray-700 dark:text-gray-300' },
