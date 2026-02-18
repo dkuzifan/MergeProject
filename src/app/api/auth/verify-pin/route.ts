@@ -23,16 +23,20 @@ export async function POST(request: NextRequest) {
   }
 
   // 2. PIN 해시 검증
+  console.log('[verify-pin] userId from RPC:', userId)
   const pinHash = crypto
     .createHmac('sha256', userId)
     .update(pin)
     .digest('hex')
+  console.log('[verify-pin] computed pinHash:', pinHash)
 
   const { data: pinData } = await admin
     .from('user_pins')
     .select('pin_hash')
     .eq('user_id', userId)
     .single()
+
+  console.log('[verify-pin] stored pinHash:', pinData?.pin_hash)
 
   if (!pinData || pinData.pin_hash !== pinHash) {
     return NextResponse.json({ error: 'PIN이 올바르지 않습니다' }, { status: 401 })
