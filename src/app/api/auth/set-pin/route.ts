@@ -20,12 +20,10 @@ export async function POST(request: NextRequest) {
   }
 
   // PIN을 user_id 기반으로 해싱
-  console.log('[set-pin] user.id:', user.id)
   const pinHash = crypto
     .createHmac('sha256', user.id)
     .update(pin)
     .digest('hex')
-  console.log('[set-pin] pinHash:', pinHash)
 
   // user_pins 테이블에 저장 (이미 있으면 업데이트)
   const admin = createAdminClient()
