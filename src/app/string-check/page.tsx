@@ -119,13 +119,10 @@ export default function StringCheckPage() {
         body: JSON.stringify({ text: korText, targets }),
       })
 
-      const data: { translations?: Record<string, string>; error?: string; detail?: string } =
+      const data: { translations?: Record<string, string>; error?: string } =
         await res.json().catch(() => ({}))
 
       if (!res.ok) {
-        // TODO: 디버깅 후 alert 제거
-        console.error('번역 API 실패:', data.detail ?? data.error)
-        alert(`번역 실패 (${res.status})\n${data.detail ?? data.error ?? '알 수 없는 오류'}`)
         const withFailed = getSheetRows(sheetName).map((r) => {
           if (r.index !== rowIndex) return r
           const newFailed = { ...r.translateFailed }
