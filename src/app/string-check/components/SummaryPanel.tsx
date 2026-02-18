@@ -8,7 +8,7 @@ interface Props {
   onScrollToRow: (index: string) => void
 }
 
-type GroupItem = { colIdx: number; label: string }
+type GroupItem = { colIdx: number; label: string; isEmpty?: boolean }
 type RowGroup = { index: string; items: GroupItem[] }
 
 export default function SummaryPanel({ rows, onScrollToRow }: Props) {
@@ -36,7 +36,7 @@ export default function SummaryPanel({ rows, onScrollToRow }: Props) {
     for (const [colStr, issue] of Object.entries(row.issues)) {
       const col = Number(colStr)
       const label = LANG_MAP[col].name
-      if (issue.type === 'error') errors.push({ colIdx: col, label })
+      if (issue.type === 'error') errors.push({ colIdx: col, label, isEmpty: issue.reason === 'empty' })
       else warnings.push({ colIdx: col, label })
     }
 
@@ -90,7 +90,14 @@ export default function SummaryPanel({ rows, onScrollToRow }: Props) {
             {/* overflow-hidden으로 태그 줄바꿈 방지 */}
             <div className="flex items-center gap-1 flex-1 min-w-0 overflow-hidden">
               {group.items.map((item) => (
-                <span key={item.colIdx} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${tagClass}`}>
+                <span
+                  key={item.colIdx}
+                  className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                    item.isEmpty
+                      ? 'bg-white dark:bg-gray-900 border border-red-300 dark:border-red-600 text-red-500 dark:text-red-400'
+                      : tagClass
+                  }`}
+                >
                   {item.label}
                 </span>
               ))}

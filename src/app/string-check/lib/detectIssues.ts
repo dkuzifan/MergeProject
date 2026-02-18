@@ -22,12 +22,18 @@ export function detectIssues(rows: StringRow[]): StringRow[] {
       }
     }
 
+    const hasKorean = !!row.cells[0]?.trim()
+
     // ② 빈 셀 + 언어 오류 검사 (col 0~9 전체)
     for (let col = 0; col <= 9; col++) {
       const val = row.cells[col]?.trim()
 
       if (!val) {
-        issues[col] = { type: 'error', reason: 'empty' }
+        // 한국어(col 0)가 있고 외국어 셀이 비어있으면 번역 대상 — 오류 아님
+        // 오류는 한국어 셀 자체가 비어있거나, 한국어도 없는데 외국어 셀이 비어있는 경우
+        if (col === 0 || !hasKorean) {
+          issues[col] = { type: 'error', reason: 'empty' }
+        }
         continue
       }
 

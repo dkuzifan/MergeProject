@@ -207,8 +207,10 @@ export default function StringTable({
                     let bgClass = ''
                     if (isCellTranslating) bgClass = 'bg-blue-50 dark:bg-blue-950/40'
                     else if (isFailed && !cellValue) bgClass = 'bg-orange-50 dark:bg-orange-950/40'
+                    else if (issue?.type === 'error' && issue.reason === 'empty') bgClass = 'bg-white dark:bg-gray-900 ring-1 ring-inset ring-red-300 dark:ring-red-700'
                     else if (issue?.type === 'error') bgClass = 'bg-red-50 dark:bg-red-950/40'
                     else if (issue?.type === 'warning') bgClass = 'bg-yellow-50 dark:bg-yellow-950/40'
+                    else if (!cellValue?.trim()) bgClass = 'bg-white dark:bg-gray-800'
 
                     return (
                       <td
@@ -242,7 +244,7 @@ export default function StringTable({
                             onClick={() => startEdit(row.index, colIdx, cellValue)}
                           >
                             {cellValue || (
-                              <span className="text-gray-300 dark:text-gray-600">—</span>
+                              <span className={issue?.reason === 'empty' ? 'text-red-400 dark:text-red-500' : 'text-gray-400 dark:text-gray-500'}>—</span>
                             )}
                           </div>
                         )}
