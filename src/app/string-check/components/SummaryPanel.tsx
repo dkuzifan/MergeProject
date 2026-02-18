@@ -112,7 +112,7 @@ export default function SummaryPanel({ rows, onScrollToRow }: Props) {
   }
 
   return (
-    <div className="flex gap-3 flex-wrap px-6 py-4 bg-gray-50 dark:bg-gray-950 border-b border-gray-200 dark:border-gray-700">
+    <div className="flex gap-3 flex-wrap px-6 py-4 bg-gray-50 dark:bg-gray-950 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
       {/* 🔴 수정 필요 */}
       <div className="flex-1 min-w-[200px] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm">
         <div className="flex items-center gap-2 mb-2 font-semibold text-sm text-gray-800 dark:text-white">
