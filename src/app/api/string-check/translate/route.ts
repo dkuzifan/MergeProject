@@ -62,8 +62,9 @@ Return JSON with these exact keys: ${JSON.stringify(emptySchema)}`
       const errText = await res.text().catch(() => '')
       console.error(`Gemini API error [${res.status}]:`, errText)
       const status = res.status === 429 ? 429 : 502
+      // TODO: 디버깅 후 detail 제거
       return NextResponse.json(
-        { error: 'Translation API failed', detail: `Gemini ${res.status}` },
+        { error: 'Translation API failed', detail: `Gemini ${res.status}: ${errText.slice(0, 300)}` },
         { status },
       )
     }
