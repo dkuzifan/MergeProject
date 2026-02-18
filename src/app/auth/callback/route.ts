@@ -1,7 +1,9 @@
 // Magic Link 콜백 Route Handler
-// Supabase가 Magic Link 클릭 후 이 엔드포인트로 리디렉션합니다
-// ?code 파라미터를 세션으로 교환한 후 / 로 이동합니다
+// 인증 코드를 세션으로 교환한 후:
+//   - PIN 미설정 유저 → /login?setup=pin (PIN 최초 설정 화면)
+//   - PIN 설정 완료 유저 → / (메인 페이지)
 import { createServerClient } from '@supabase/ssr'
+import { createAdminClient } from '@/utils/supabase/admin'
 import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
 
@@ -17,9 +19,7 @@ export async function GET(request: NextRequest) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
-          getAll() {
-            return cookieStore.getAll()
-          },
+          getAll() { return cookieStore.getAll() },
           setAll(cookiesToSet) {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)
@@ -29,13 +29,25 @@ export async function GET(request: NextRequest) {
       }
     )
 
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    const { error, data } = await supabase.auth.exchangeCodeForSession(code)
 
-    if (!error) {
+    if (!error && data.user) {
+      // PIN 설정 여부 확인
+      const admin = createAdminClient()
+      const { data: pinData } = await admin
+        .from('user_pins')
+        .select('user_id')
+        .eq('user_id', data.user.id)
+        .single()
+
+      if (!pinData) {
+        // PIN 미설정 → PIN 설정 화면으로
+        return NextResponse.redirect(`${origin}/login?setup=pin`)
+      }
+
       return NextResponse.redirect(`${origin}/`)
     }
   }
 
-  // code 없거나 교환 실패(만료/재사용) → /login?error=expired
   return NextResponse.redirect(`${origin}/login?error=expired`)
 }
