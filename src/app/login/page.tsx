@@ -107,7 +107,7 @@ export default function LoginPage() {
       const { error: sessionError } = await supabase.auth.verifyOtp({
         email,
         token: data.token,
-        type: 'email',
+        type: 'magiclink',
       })
 
       if (sessionError) {
