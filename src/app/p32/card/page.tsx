@@ -12,6 +12,7 @@ type Card = {
   image: string;
   rank: number;
   isGold: boolean;
+  ratio: number;
 };
 
 type PackDef = {
@@ -120,7 +121,7 @@ export default function CardSimulatorPage() {
       if (cardsRes.error || packsRes.error) throw new Error("Load failed");
 
       const defaultCards = cardsRes.data.map((c: any) => ({
-        id: c.id, name: c.name, image: c.image || "", rank: c.rank, isGold: c.is_gold
+        id: c.id, name: c.name, image: c.image || "", rank: c.rank, isGold: c.is_gold, ratio: c.ratio ?? 1
       }));
       const defaultPacks = packsRes.data.map((p: any) => ({
         id: p.id, name: p.name, image: p.image || "",
@@ -167,7 +168,7 @@ export default function CardSimulatorPage() {
     const { data } = await supabase.from('user_game_data').select('*').eq('user_id', userId).single();
     setIsLoading(false);
     if (data) {
-      setCardsData(data.cards_data); setPacksData(data.packs_data); setCollection(data.collection || {}); setStarPoints(Number(data.star_points || 0));
+      setCardsData(data.cards_data.map((c: any) => ({ ...c, ratio: c.ratio ?? 1 }))); setPacksData(data.packs_data); setCollection(data.collection || {}); setStarPoints(Number(data.star_points || 0));
       let userSetNames = data.set_names || Array(12).fill("");
       if (userSetNames.every((n: any) => !n || n === "")) {
         const defaultNames = await fetchDefaultSetNamesOnly(); if (defaultNames.some(n => n !== "")) userSetNames = defaultNames;
@@ -259,7 +260,7 @@ export default function CardSimulatorPage() {
       for (let i = startIndex; i < lines.length; i++) {
         const cols = lines[i].split(","); const id = Number(cols[0]); if (isNaN(id)) continue;
         const existIdx = newCards.findIndex(c => c.id === id);
-        const newCard = { id, name: cols[1]||"", image: cols[2]||"", rank: Number(cols[3])||1, isGold: (cols[4]==="1"||cols[4]==="TRUE") };
+        const newCard = { id, name: cols[1]||"", image: cols[2]||"", rank: Number(cols[3])||1, isGold: (cols[4]==="1"||cols[4]==="TRUE"), ratio: Number(cols[5]) || 1 };
         if (existIdx >= 0) newCards[existIdx] = newCard; else newCards.push(newCard);
         cnt++;
       }
@@ -289,7 +290,7 @@ export default function CardSimulatorPage() {
     const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8;" }); const url = URL.createObjectURL(blob);
     const link = document.createElement("a"); link.href = url; link.setAttribute("download", fileName); document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
-  const exportCardDataCSV = () => { const h = ["id,name,image,rank,is_gold"]; const r = cardsData.map(c => `${c.id},${c.name},${c.image},${c.rank},${c.isGold?1:0}`); downloadCSV([h, ...r].join("\n"), "card_list.csv"); };
+  const exportCardDataCSV = () => { const h = ["id,name,image,rank,is_gold,ratio"]; const r = cardsData.map(c => `${c.id},${c.name},${c.image},${c.rank},${c.isGold?1:0},${c.ratio??1}`); downloadCSV([h, ...r].join("\n"), "card_list.csv"); };
   const exportPackDataCSV = () => { const h = ["id,name,image,card_count,guaranteed_rank,guaranteed_count,prob_r1,prob_r2,prob_r3,prob_r4,prob_r5,prob_g4,prob_g5"]; const r = packsData.map(p => `${p.id},${p.name},${p.image},${p.cardCount},${p.guaranteedRank},${p.guaranteedCount},${p.probs.r1},${p.probs.r2},${p.probs.r3},${p.probs.r4},${p.probs.r5},${p.probs.g4},${p.probs.g5}`); downloadCSV([h, ...r].join("\n"), "pack_list.csv"); };
 
   // --- Simulator Logic ---
@@ -313,7 +314,13 @@ export default function CardSimulatorPage() {
     let pool = cardsData.filter(c => c.rank === selected.rank && c.isGold === selected.gold);
     if (pool.length === 0) pool = cardsData.filter(c => c.rank === selected.rank);
     if (pool.length === 0) pool = cardsData;
-    return pool[Math.floor(Math.random() * pool.length)];
+    const totalWeight = pool.reduce((sum, c) => sum + (c.ratio ?? 1), 0);
+    let rand = Math.random() * totalWeight;
+    for (const card of pool) {
+      rand -= (card.ratio ?? 1);
+      if (rand <= 0) return card;
+    }
+    return pool[pool.length - 1];
   };
 
   const updateCollection = (newCards: Card[]) => {
