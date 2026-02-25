@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CS Page Mockup — MergeProject</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f1f5f9;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --hero-from: #1e3a5f;
+      --hero-to: #2563eb;
+      --card-hover: #f8fafc;
+      --error: #ef4444;
+      --success: #22c55e;
+      --tag-bg: #dbeafe;
+      --tag-text: #1d4ed8;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── 목업 네비게이터 (화면 전환용) ── */
+    .mockup-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #0f172a;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 16px;
+      flex-wrap: wrap;
+    }
+    .mockup-nav span {
+      color: #94a3b8;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-right: 8px;
+    }
+    .mockup-nav button {
+      background: transparent;
+      color: #94a3b8;
+      border: 1px solid #334155;
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .mockup-nav button:hover { background: #1e293b; color: #e2e8f0; }
+    .mockup-nav button.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+
+    /* ── 화면 ── */
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* ── 앱 Navbar ── */
+    .app-navbar {
+      background: rgba(255,255,255,0.9);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      backdrop-filter: blur(8px);
+    }
+    .app-navbar .logo {
+      width: 44px; height: 44px;
+      background: #3b82f6;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: 700; font-size: 11px; letter-spacing: 0.05em;
+    }
+    .app-navbar .nav-links { display: flex; gap: 32px; }
+    .app-navbar .nav-links a {
+      font-weight: 700; font-size: 15px; color: #374151; text-decoration: none;
+    }
+    .app-navbar .nav-links a.active { color: #3b82f6; }
+    .app-navbar .nav-right { display: flex; align-items: center; gap: 8px; }
+    .app-navbar .user-badge {
+      background: #f1f5f9; color: #64748b;
+      padding: 4px 12px; border-radius: 20px; font-size: 12px;
+    }
+    .app-navbar .logout-btn {
+      border: 1px solid #d1d5db; background: transparent;
+      color: #374151; padding: 4px 12px; border-radius: 8px;
+      font-size: 12px; cursor: pointer;
+    }
+
+    /* ── CS 레이아웃 wrapper ── */
+    .cs-layout { min-height: calc(100vh - 100px); display: flex; flex-direction: column; }
+    .cs-main { flex: 1; }
+
+    /* ── CsHeader 히어로 ── */
+    .cs-hero {
+      background: linear-gradient(135deg, var(--hero-from) 0%, var(--hero-to) 100%);
+      padding: 60px 24px 48px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .cs-hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 70% 30%, rgba(99,179,237,0.18) 0%, transparent 60%);
+    }
+    .cs-hero h1 {
+      color: #fff;
+      font-size: 32px; font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+      position: relative;
+    }
+    .cs-hero p {
+      color: rgba(255,255,255,0.75);
+      font-size: 15px; margin-bottom: 28px;
+      position: relative;
+    }
+
+    /* ── SearchBar ── */
+    .search-bar {
+      display: flex; align-items: center;
+      background: #fff;
+      border-radius: 12px;
+      max-width: 560px; margin: 0 auto;
+      padding: 6px 6px 6px 16px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+      position: relative;
+    }
+    .search-bar input {
+      flex: 1; border: none; outline: none;
+      font-size: 15px; color: #0f172a;
+      background: transparent;
+    }
+    .search-bar input::placeholder { color: #94a3b8; }
+    .search-bar button {
+      background: #3b82f6; color: #fff;
+      border: none; border-radius: 8px;
+      padding: 8px 20px; font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .search-bar button:hover { background: var(--primary-hover); }
+
+    /* ── CS 콘텐츠 영역 ── */
+    .cs-content { max-width: 960px; margin: 0 auto; padding: 40px 24px; }
+
+    /* ── Contact CTA ── */
+    .contact-cta {
+      display: flex; justify-content: flex-end;
+      margin-bottom: 32px;
+    }
+    .contact-cta a, .contact-cta button {
+      background: transparent;
+      border: 1.5px solid var(--primary);
+      color: var(--primary);
+      padding: 8px 20px; border-radius: 8px;
+      font-size: 14px; font-weight: 600;
+      cursor: pointer; text-decoration: none;
+      transition: all 0.15s;
+    }
+    .contact-cta a:hover, .contact-cta button:hover {
+      background: var(--primary); color: #fff;
+    }
+
+    /* ── Section Title ── */
+    .section-title {
+      font-size: 20px; font-weight: 700;
+      margin-bottom: 20px; color: var(--text);
+    }
+
+    /* ── TopicGrid ── */
+    .topic-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 48px;
+    }
+    .topic-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .topic-card:hover {
+      border-color: var(--primary);
+      box-shadow: 0 4px 16px rgba(59,130,246,0.12);
+      transform: translateY(-2px);
+    }
+    .topic-card .icon { font-size: 32px; margin-bottom: 12px; }
+    .topic-card h3 { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+    .topic-card p { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+
+    /* ── WhatsNew Grid ── */
+    .whats-new-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 48px;
+    }
+    .news-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .news-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); transform: translateY(-2px); }
+    .news-card .thumb {
+      height: 100px;
+      background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px;
+    }
+    .news-card .news-body { padding: 14px 16px; }
+    .news-card h4 { font-size: 13px; font-weight: 600; margin-bottom: 6px; line-height: 1.4; }
+    .news-card p { font-size: 11px; color: var(--text-muted); }
+
+    /* ── CsFooter ── */
+    .cs-footer {
+      background: #1e293b;
+      color: #94a3b8;
+      padding: 32px 24px;
+      margin-top: auto;
+    }
+    .cs-footer-inner {
+      max-width: 960px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 16px;
+    }
+    .cs-footer .footer-links { display: flex; gap: 20px; flex-wrap: wrap; }
+    .cs-footer .footer-links button {
+      background: transparent; border: none;
+      color: #94a3b8; font-size: 12px; cursor: pointer;
+      transition: color 0.15s;
+    }
+    .cs-footer .footer-links button:hover { color: #e2e8f0; }
+    .cs-footer .copyright { font-size: 11px; }
+
+    /* ────────────────────────────────
+       SCREEN 2: 검색 결과
+    ──────────────────────────────── */
+    .search-header {
+      background: #1e3a5f;
+      padding: 32px 24px;
+    }
+    .search-header h2 { color: #fff; font-size: 20px; margin-bottom: 16px; }
+    .search-header .search-bar { max-width: 640px; margin: 0; }
+
+    .search-content { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
+    .search-result-count { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+    .article-list { display: flex; flex-direction: column; gap: 12px; }
+    .article-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 20px;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex; align-items: flex-start; gap: 16px;
+    }
+    .article-item:hover { border-color: var(--primary); background: #f0f7ff; }
+    .match-badge {
+      font-size: 10px; font-weight: 700;
+      padding: 2px 8px; border-radius: 4px;
+      white-space: nowrap; flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .match-badge.title { background: #dbeafe; color: #1d4ed8; }
+    .match-badge.body { background: #dcfce7; color: #15803d; }
+    .match-badge.tag { background: #fef9c3; color: #92400e; }
+    .article-item h4 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+    .article-item p { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+    .article-item .cat-label { font-size: 11px; color: var(--primary); margin-top: 6px; }
+
+    /* empty state */
+    .empty-state {
+      text-align: center; padding: 80px 24px;
+      color: var(--text-muted);
+    }
+    .empty-state .emoji { font-size: 48px; margin-bottom: 16px; }
+    .empty-state h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--text); }
+    .empty-state p { font-size: 14px; }
+
+    /* ────────────────────────────────
+       SCREEN 3: 카테고리 페이지
+    ──────────────────────────────── */
+    .category-header {
+      background: linear-gradient(135deg, #1e3a5f 0%, #1d4ed8 100%);
+      padding: 40px 24px;
+    }
+    .category-header .breadcrumb {
+      font-size: 12px; color: rgba(255,255,255,0.6);
+      margin-bottom: 12px;
+    }
+    .category-header h1 { color: #fff; font-size: 26px; font-weight: 800; margin-bottom: 6px; }
+    .category-header p { color: rgba(255,255,255,0.75); font-size: 14px; }
+
+    .category-content { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
+    .article-count { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+
+    /* ────────────────────────────────
+       SCREEN 4: Contact Us
+    ──────────────────────────────── */
+    .contact-page-header {
+      background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+      padding: 40px 24px;
+    }
+    .contact-page-header h1 { color: #fff; font-size: 26px; font-weight: 800; margin-bottom: 6px; }
+    .contact-page-header p { color: rgba(255,255,255,0.75); font-size: 14px; }
+
+    .contact-content { max-width: 680px; margin: 0 auto; padding: 40px 24px; }
+
+    .form-group { margin-bottom: 20px; }
+    .form-group label {
+      display: block;
+      font-size: 13px; font-weight: 600;
+      color: var(--text); margin-bottom: 6px;
+    }
+    .form-group label .required { color: var(--error); margin-left: 2px; }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 14px;
+      color: var(--text);
+      background: var(--surface);
+      outline: none;
+      transition: border-color 0.15s;
+      font-family: inherit;
+    }
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus { border-color: var(--primary); }
+    .form-group input.error { border-color: var(--error); }
+    .form-group textarea { min-height: 120px; resize: vertical; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .error-msg { color: var(--error); font-size: 12px; margin-top: 4px; }
+
+    /* 파일 드롭존 */
+    .file-dropzone {
+      border: 2px dashed var(--border);
+      border-radius: 10px;
+      padding: 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .file-dropzone:hover { border-color: var(--primary); background: #f0f7ff; }
+    .file-dropzone p { font-size: 13px; color: var(--text-muted); margin-top: 8px; }
+    .file-dropzone .icon { font-size: 24px; }
+
+    .refund-link { font-size: 12px; color: var(--primary); margin-top: 8px; display: block; cursor: pointer; }
+    .refund-link:hover { text-decoration: underline; }
+
+    /* Submit */
+    .submit-btn {
+      width: 100%;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 15px; font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+      margin-top: 8px;
+    }
+    .submit-btn:hover:not(:disabled) { background: var(--primary-hover); }
+    .submit-btn:disabled { background: #cbd5e1; color: #94a3b8; cursor: not-allowed; }
+    .submit-btn.loading { background: #93c5fd; }
+
+    /* Thank You */
+    .thank-you {
+      text-align: center;
+      padding: 60px 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+    }
+    .thank-you .icon { font-size: 52px; margin-bottom: 16px; }
+    .thank-you h2 { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+    .thank-you p { font-size: 14px; color: var(--text-muted); line-height: 1.7; }
+
+    /* ────────────────────────────────
+       SCREEN 5: Refund Guides
+    ──────────────────────────────── */
+    .refund-content { max-width: 720px; margin: 0 auto; padding: 40px 24px; }
+    .qa-item { margin-bottom: 24px; }
+    .qa-item h3 {
+      font-size: 15px; font-weight: 700;
+      margin-bottom: 8px;
+      display: flex; align-items: baseline; gap: 8px;
+    }
+    .qa-item h3 .q { color: var(--primary); font-size: 16px; }
+    .qa-item p { font-size: 14px; color: var(--text-muted); line-height: 1.7; padding-left: 20px; }
+    .qa-divider { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+
+    /* ── 스크롤바 얇게 ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+    /* ── 모달 ── */
+    .modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 200;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: #fff;
+      border-radius: 16px;
+      padding: 28px;
+      width: 360px;
+      max-width: 90vw;
+    }
+    .modal-box h3 { font-size: 17px; font-weight: 700; margin-bottom: 16px; }
+    .lang-list { display: flex; flex-direction: column; gap: 8px; }
+    .lang-item {
+      padding: 10px 14px; border-radius: 8px;
+      border: 1.5px solid var(--border);
+      font-size: 14px; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .lang-item:hover { border-color: var(--primary); color: var(--primary); }
+    .lang-item.selected { border-color: var(--primary); background: #dbeafe; color: var(--primary); font-weight: 600; }
+    .modal-close {
+      margin-top: 20px; width: 100%;
+      background: #f1f5f9; border: none;
+      border-radius: 8px; padding: 10px;
+      font-size: 14px; cursor: pointer;
+    }
+    .modal-close:hover { background: #e2e8f0; }
+
+    /* ── Accessibility Drawer ── */
+    .drawer-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 200;
+    }
+    .drawer-overlay.open { display: block; }
+    .drawer {
+      position: fixed;
+      top: 0; right: -360px;
+      width: 340px; height: 100vh;
+      background: #fff;
+      box-shadow: -4px 0 24px rgba(0,0,0,0.12);
+      padding: 28px;
+      transition: right 0.3s ease;
+      z-index: 201;
+      overflow-y: auto;
+    }
+    .drawer.open { right: 0; }
+    .drawer h3 { font-size: 17px; font-weight: 700; margin-bottom: 20px; }
+    .drawer-option {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 0; border-bottom: 1px solid var(--border);
+    }
+    .drawer-option label { font-size: 14px; }
+    .toggle {
+      width: 44px; height: 24px;
+      background: #cbd5e1; border-radius: 12px;
+      cursor: pointer; position: relative; transition: background 0.2s;
+    }
+    .toggle.on { background: var(--primary); }
+    .toggle::after {
+      content: '';
+      position: absolute; top: 3px; left: 3px;
+      width: 18px; height: 18px;
+      background: #fff; border-radius: 50%;
+      transition: left 0.2s;
+    }
+    .toggle.on::after { left: 23px; }
+    .drawer-close {
+      margin-top: 20px; width: 100%;
+      background: #f1f5f9; border: none;
+      border-radius: 8px; padding: 10px;
+      font-size: 14px; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── 목업 화면 전환 네비게이터 ── -->
+<nav class="mockup-nav">
+  <span>Mockup</span>
+  <button class="active" onclick="showScreen('main')">① CS 메인</button>
+  <button onclick="showScreen('search-result')">② 검색 결과</button>
+  <button onclick="showScreen('search-empty')">③ 검색 empty</button>
+  <button onclick="showScreen('category')">④ 카테고리</button>
+  <button onclick="showScreen('contact')">⑤ Contact Us</button>
+  <button onclick="showScreen('thankyou')">⑥ Thank You</button>
+  <button onclick="showScreen('refund')">⑦ Refund Guides</button>
+</nav>
+
+<!-- ════════════════════════════════════════
+     SCREEN 1: CS 메인 페이지
+════════════════════════════════════════ -->
+<div id="screen-main" class="screen active">
+  <!-- 앱 Navbar -->
+  <div class="app-navbar">
+    <div style="display:flex;align-items:center;gap:48px">
+      <div class="logo">MERGE</div>
+      <div class="nav-links">
+        <a href="#">P32</a>
+        <a href="#">P40</a>
+        <a href="#">도구</a>
+        <a href="#">pAI</a>
+        <a href="#" class="active">CS</a>
+      </div>
+    </div>
+    <div class="nav-right">
+      <span class="user-badge">user@storytaco.com</span>
+      <button class="logout-btn">로그아웃</button>
+    </div>
+  </div>
+
+  <div class="cs-layout">
+    <div class="cs-main">
+      <!-- CsHeader 히어로 -->
+      <div class="cs-hero">
+        <h1>Game Support Center</h1>
+        <p>무엇을 도와드릴까요?</p>
+        <div class="search-bar">
+          <input type="text" placeholder="검색어를 입력하세요..." />
+          <button>검색</button>
+        </div>
+      </div>
+
+      <!-- 콘텐츠 -->
+      <div class="cs-content">
+        <!-- Contact CTA -->
+        <div class="contact-cta">
+          <button onclick="showScreen('contact')">📬 문의 메일 보내기</button>
+        </div>
+
+        <!-- TopicGrid -->
+        <h2 class="section-title">Topics</h2>
+        <div class="topic-grid">
+          <div class="topic-card" onclick="showScreen('category')">
+            <div class="icon">🎮</div>
+            <h3>How to Play</h3>
+            <p>게임 기본 규칙과 조작법 안내</p>
+          </div>
+          <div class="topic-card" onclick="showScreen('category')">
+            <div class="icon">🎉</div>
+            <h3>Events</h3>
+            <p>진행 중인 이벤트 정보와 참가 방법</p>
+          </div>
+          <div class="topic-card" onclick="showScreen('category')">
+            <div class="icon">🏆</div>
+            <h3>Rewards</h3>
+            <p>보상 지급 기준과 수령 방법</p>
+          </div>
+          <div class="topic-card" onclick="showScreen('category')">
+            <div class="icon">💳</div>
+            <h3>Purchases</h3>
+            <p>결제, 환불, 구매 관련 안내</p>
+          </div>
+          <div class="topic-card" onclick="showScreen('category')">
+            <div class="icon">📱</div>
+            <h3>Account & Device</h3>
+            <p>계정 관리 및 기기 연동 문제</p>
+          </div>
+          <div class="topic-card" onclick="showScreen('category')">
+            <div class="icon">💬</div>
+            <h3>Etc</h3>
+            <p>기타 문의 및 피드백</p>
+          </div>
+        </div>
+
+        <!-- What's New -->
+        <h2 class="section-title">What's New?</h2>
+        <div class="whats-new-grid">
+          <div class="news-card">
+            <div class="thumb">📢</div>
+            <div class="news-body">
+              <h4>봄 시즌 이벤트 안내</h4>
+              <p>2026.02.20</p>
+            </div>
+          </div>
+          <div class="news-card">
+            <div class="thumb">🎁</div>
+            <div class="news-body">
+              <h4>로그인 보상 시스템 업데이트</h4>
+              <p>2026.02.15</p>
+            </div>
+          </div>
+          <div class="news-card">
+            <div class="thumb">🛠️</div>
+            <div class="news-body">
+              <h4>v2.3.1 패치 노트</h4>
+              <p>2026.02.10</p>
+            </div>
+          </div>
+          <div class="news-card">
+            <div class="thumb">💰</div>
+            <div class="news-body">
+              <h4>결제 오류 임시 조치 안내</h4>
+              <p>2026.02.05</p>
+            </div>
+          </div>
+          <div class="news-card">
+            <div class="thumb">🔐</div>
+            <div class="news-body">
+              <h4>계정 보안 강화 업데이트</h4>
+              <p>2026.01.28</p>
+            </div>
+          </div>
+          <div class="news-card">
+            <div class="thumb">🌍</div>
+            <div class="news-body">
+              <h4>다국어 지원 지역 확대</h4>
+              <p>2026.01.20</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CsFooter -->
+    <footer class="cs-footer">
+      <div class="cs-footer-inner">
+        <div class="footer-links">
+          <button onclick="openModal('lang-modal')">🌐 Language</button>
+          <button onclick="openModal('cookie-modal')">🍪 Cookie Settings</button>
+          <button onclick="openDrawer()">♿ Accessibility</button>
+          <button onclick="showScreen('refund')">📄 Refund Guides</button>
+        </div>
+        <span class="copyright">© 2026 MergeProject. All rights reserved.</span>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 2: 검색 결과 (결과 있음)
+════════════════════════════════════════ -->
+<div id="screen-search-result" class="screen">
+  <div class="app-navbar">
+    <div style="display:flex;align-items:center;gap:48px">
+      <div class="logo">MERGE</div>
+      <div class="nav-links">
+        <a href="#" onclick="showScreen('main')">← CS 홈</a>
+      </div>
+    </div>
+    <div class="nav-right">
+      <span class="user-badge">user@storytaco.com</span>
+    </div>
+  </div>
+
+  <div class="search-header">
+    <h2>Search Results</h2>
+    <div class="search-bar">
+      <input type="text" value="환불" />
+      <button>검색</button>
+    </div>
+  </div>
+
+  <div class="search-content">
+    <p class="search-result-count">"환불" 검색 결과 3건</p>
+    <div class="article-list">
+      <div class="article-item">
+        <span class="match-badge title">Title</span>
+        <div>
+          <h4>환불 신청 방법 및 처리 기간</h4>
+          <p>인앱 결제 환불은 구매일로부터 7일 이내에 신청하실 수 있습니다...</p>
+          <span class="cat-label">💳 Purchases</span>
+        </div>
+      </div>
+      <div class="article-item">
+        <span class="match-badge title">Title</span>
+        <div>
+          <h4>환불 불가 항목 안내</h4>
+          <p>소비성 아이템 및 이미 사용된 재화는 환불이 제한될 수 있습니다...</p>
+          <span class="cat-label">💳 Purchases</span>
+        </div>
+      </div>
+      <div class="article-item">
+        <span class="match-badge body">Body</span>
+        <div>
+          <h4>결제 오류 발생 시 대처법</h4>
+          <p>결제는 완료되었으나 아이템을 받지 못한 경우 환불 또는 재지급 처리가 가능합니다...</p>
+          <span class="cat-label">💳 Purchases</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="cs-footer">
+    <div class="cs-footer-inner">
+      <div class="footer-links">
+        <button onclick="openModal('lang-modal')">🌐 Language</button>
+        <button>🍪 Cookie Settings</button>
+        <button onclick="openDrawer()">♿ Accessibility</button>
+      </div>
+      <span class="copyright">© 2026 MergeProject. All rights reserved.</span>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 3: 검색 결과 (empty state)
+════════════════════════════════════════ -->
+<div id="screen-search-empty" class="screen">
+  <div class="app-navbar">
+    <div style="display:flex;align-items:center;gap:48px">
+      <div class="logo">MERGE</div>
+      <div class="nav-links">
+        <a href="#" onclick="showScreen('main')">← CS 홈</a>
+      </div>
+    </div>
+    <div class="nav-right">
+      <span class="user-badge">user@storytaco.com</span>
+    </div>
+  </div>
+
+  <div class="search-header">
+    <h2>Search Results</h2>
+    <div class="search-bar">
+      <input type="text" value="xyzabc123" />
+      <button>검색</button>
+    </div>
+  </div>
+
+  <div class="search-content">
+    <div class="empty-state">
+      <div class="emoji">🔍</div>
+      <h3>No results for 'xyzabc123'</h3>
+      <p>다른 검색어를 시도하거나 카테고리를 탐색해보세요.</p>
+    </div>
+  </div>
+
+  <footer class="cs-footer">
+    <div class="cs-footer-inner">
+      <div class="footer-links">
+        <button onclick="openModal('lang-modal')">🌐 Language</button>
+        <button>🍪 Cookie Settings</button>
+        <button onclick="openDrawer()">♿ Accessibility</button>
+      </div>
+      <span class="copyright">© 2026 MergeProject. All rights reserved.</span>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 4: 카테고리 페이지
+════════════════════════════════════════ -->
+<div id="screen-category" class="screen">
+  <div class="app-navbar">
+    <div style="display:flex;align-items:center;gap:48px">
+      <div class="logo">MERGE</div>
+      <div class="nav-links">
+        <a href="#" onclick="showScreen('main')">← CS 홈</a>
+      </div>
+    </div>
+    <div class="nav-right">
+      <span class="user-badge">user@storytaco.com</span>
+    </div>
+  </div>
+
+  <div class="category-header">
+    <p class="breadcrumb">CS 홈 &rsaquo; Purchases</p>
+    <h1>💳 Purchases</h1>
+    <p>결제, 환불, 구매 관련 안내</p>
+  </div>
+
+  <div class="category-content">
+    <p class="article-count">5개 아티클</p>
+    <div class="article-list">
+      <div class="article-item">
+        <div>
+          <h4>환불 신청 방법 및 처리 기간</h4>
+          <p>인앱 결제 환불은 구매일로부터 7일 이내에 신청하실 수 있습니다...</p>
+        </div>
+      </div>
+      <div class="article-item">
+        <div>
+          <h4>환불 불가 항목 안내</h4>
+          <p>소비성 아이템 및 이미 사용된 재화는 환불이 제한될 수 있습니다...</p>
+        </div>
+      </div>
+      <div class="article-item">
+        <div>
+          <h4>결제 오류 발생 시 대처법</h4>
+          <p>결제는 완료되었으나 아이템을 받지 못한 경우 재지급 처리 요청 방법...</p>
+        </div>
+      </div>
+      <div class="article-item">
+        <div>
+          <h4>구독 상품 해지 방법</h4>
+          <p>월정액 구독 상품은 다음 갱신일 전까지 해지 신청이 가능합니다...</p>
+        </div>
+      </div>
+      <div class="article-item">
+        <div>
+          <h4>결제 수단 변경 안내</h4>
+          <p>등록된 결제 수단 변경은 앱 설정 → 계정 → 결제 정보에서 가능합니다...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="cs-footer">
+    <div class="cs-footer-inner">
+      <div class="footer-links">
+        <button onclick="openModal('lang-modal')">🌐 Language</button>
+        <button>🍪 Cookie Settings</button>
+        <button onclick="openDrawer()">♿ Accessibility</button>
+      </div>
+      <span class="copyright">© 2026 MergeProject. All rights reserved.</span>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 5: Contact Us 폼
+════════════════════════════════════════ -->
+<div id="screen-contact" class="screen">
+  <div class="app-navbar">
+    <div style="display:flex;align-items:center;gap:48px">
+      <div class="logo">MERGE</div>
+      <div class="nav-links">
+        <a href="#" onclick="showScreen('main')">← CS 홈</a>
+      </div>
+    </div>
+    <div class="nav-right">
+      <span class="user-badge">user@storytaco.com</span>
+    </div>
+  </div>
+
+  <div class="contact-page-header">
+    <h1>Contact Us</h1>
+    <p>문의 내용을 작성해 주세요. 빠르게 도와드리겠습니다.</p>
+  </div>
+
+  <div class="contact-content">
+    <div class="form-group">
+      <label>Date of Issue <span class="required">*</span></label>
+      <input type="date" value="2026-02-26" />
+    </div>
+
+    <div class="form-group">
+      <label>Topic <span class="required">*</span></label>
+      <select>
+        <option value="">-- 토픽을 선택하세요 --</option>
+        <option>Loading Issues</option>
+        <option>Purchases</option>
+        <option>Technical</option>
+        <option>Events &amp; Rewards</option>
+        <option>Game Features</option>
+        <option>Account Information</option>
+        <option>Feedback &amp; Suggestions</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Description <span class="required">*</span></label>
+      <textarea placeholder="문제 상황을 자세히 설명해 주세요..."></textarea>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>First Name <span class="required">*</span></label>
+        <input type="text" placeholder="이름" />
+      </div>
+      <div class="form-group">
+        <label>Email <span class="required">*</span></label>
+        <input type="email" placeholder="이메일 주소" />
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Confirm Email <span class="required">*</span></label>
+      <input type="email" class="error" placeholder="이메일 주소 확인" value="different@example.com" />
+      <p class="error-msg">이메일 주소가 일치하지 않습니다.</p>
+    </div>
+
+    <div class="form-group">
+      <label>Attachments</label>
+      <div class="file-dropzone">
+        <div class="icon">📎</div>
+        <p>파일을 드래그하거나 클릭하여 첨부하세요</p>
+        <p style="font-size:11px;margin-top:4px;color:#94a3b8">최대 5개 파일</p>
+      </div>
+      <a class="refund-link" onclick="showScreen('refund')">📄 Documentation required for refund</a>
+    </div>
+
+    <button class="submit-btn" disabled>Submit</button>
+
+    <p style="font-size:11px;color:#94a3b8;text-align:center;margin-top:12px">
+      모든 필수 항목(*) 입력 및 이메일 일치 시 제출 가능합니다.
+    </p>
+  </div>
+
+  <footer class="cs-footer">
+    <div class="cs-footer-inner">
+      <div class="footer-links">
+        <button onclick="openModal('lang-modal')">🌐 Language</button>
+        <button>🍪 Cookie Settings</button>
+        <button onclick="openDrawer()">♿ Accessibility</button>
+      </div>
+      <span class="copyright">© 2026 MergeProject. All rights reserved.</span>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 6: Thank You
+════════════════════════════════════════ -->
+<div id="screen-thankyou" class="screen">
+  <div class="app-navbar">
+    <div style="display:flex;align-items:center;gap:48px">
+      <div class="logo">MERGE</div>
+      <div class="nav-links">
+        <a href="#" onclick="showScreen('main')">← CS 홈</a>
+      </div>
+    </div>
+    <div class="nav-right">
+      <span class="user-badge">user@storytaco.com</span>
+    </div>
+  </div>
+
+  <div class="contact-page-header">
+    <h1>Contact Us</h1>
+    <p>문의 내용을 작성해 주세요. 빠르게 도와드리겠습니다.</p>
+  </div>
+
+  <div class="contact-content">
+    <div class="thank-you">
+      <div class="icon">✅</div>
+      <h2>Thank you for contacting us!</h2>
+      <p>
+        문의가 성공적으로 접수되었습니다.<br />
+        검토 후 등록하신 이메일로 회신드리겠습니다.<br /><br />
+        <span style="color:#94a3b8;font-size:12px">보통 영업일 기준 1~3일 내에 답변됩니다.</span>
+      </p>
+    </div>
+  </div>
+
+  <footer class="cs-footer">
+    <div class="cs-footer-inner">
+      <div class="footer-links">
+        <button onclick="openModal('lang-modal')">🌐 Language</button>
+        <button>🍪 Cookie Settings</button>
+        <button onclick="openDrawer()">♿ Accessibility</button>
+      </div>
+      <span class="copyright">© 2026 MergeProject. All rights reserved.</span>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 7: Refund Guides
+════════════════════════════════════════ -->
+<div id="screen-refund" class="screen">
+  <div class="app-navbar">
+    <div style="display:flex;align-items:center;gap:48px">
+      <div class="logo">MERGE</div>
+      <div class="nav-links">
+        <a href="#" onclick="showScreen('main')">← CS 홈</a>
+      </div>
+    </div>
+    <div class="nav-right">
+      <span class="user-badge">user@storytaco.com</span>
+    </div>
+  </div>
+
+  <div class="category-header">
+    <p class="breadcrumb">CS 홈 &rsaquo; Refund Guides</p>
+    <h1>📄 Refund Guides</h1>
+    <p>환불 절차 및 필요 서류 안내</p>
+  </div>
+
+  <div class="refund-content">
+    <div class="qa-item">
+      <h3><span class="q">Q.</span> 환불 신청은 어떻게 하나요?</h3>
+      <p>환불은 구매일로부터 7일 이내에 고객지원 센터를 통해 신청하실 수 있습니다. Contact Us 폼에서 토픽을 'Purchases'로 선택 후 구매 정보를 기재해 주세요.</p>
+    </div>
+    <hr class="qa-divider" />
+    <div class="qa-item">
+      <h3><span class="q">Q.</span> 환불에 필요한 서류가 있나요?</h3>
+      <p>환불 신청 시 아래 서류를 첨부파일로 제출해 주시면 처리가 빠릅니다: 결제 영수증 스크린샷, 계정 ID 또는 이메일, 문제 발생 시점의 화면 캡처(선택).</p>
+    </div>
+    <hr class="qa-divider" />
+    <div class="qa-item">
+      <h3><span class="q">Q.</span> 환불이 불가한 경우는 언제인가요?</h3>
+      <p>다음에 해당하는 경우 환불이 제한될 수 있습니다: 이미 사용(소비)된 재화, 이벤트 보상으로 지급된 아이템, 구매일로부터 7일이 경과한 경우, 계정 이용 정지가 확인된 경우.</p>
+    </div>
+    <hr class="qa-divider" />
+    <div class="qa-item">
+      <h3><span class="q">Q.</span> 환불 처리 기간은 얼마나 걸리나요?</h3>
+      <p>서류 확인 완료 후 영업일 기준 3~5일 내에 원결제 수단으로 환불 처리됩니다. 카드사 내부 정책에 따라 실제 계좌 반영은 1~2주 추가 소요될 수 있습니다.</p>
+    </div>
+    <hr class="qa-divider" />
+    <div class="qa-item">
+      <h3><span class="q">Q.</span> 환불 신청 후 진행 상황은 어떻게 확인하나요?</h3>
+      <p>신청 시 등록하신 이메일로 처리 단계별 안내 메일이 발송됩니다. 추가 문의는 동일 이메일 스레드로 회신해 주세요.</p>
+    </div>
+  </div>
+
+  <footer class="cs-footer">
+    <div class="cs-footer-inner">
+      <div class="footer-links">
+        <button onclick="openModal('lang-modal')">🌐 Language</button>
+        <button>🍪 Cookie Settings</button>
+        <button onclick="openDrawer()">♿ Accessibility</button>
+        <button onclick="showScreen('contact')">📬 문의하기</button>
+      </div>
+      <span class="copyright">© 2026 MergeProject. All rights reserved.</span>
+    </div>
+  </footer>
+</div>
+
+<!-- ════════════════════════
+     MODALS
+════════════════════════ -->
+<!-- Language Modal -->
+<div id="lang-modal" class="modal-overlay" onclick="closeModal('lang-modal')">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <h3>🌐 언어 선택</h3>
+    <div class="lang-list">
+      <div class="lang-item selected">🇰🇷 한국어</div>
+      <div class="lang-item">🇺🇸 English</div>
+      <div class="lang-item">🇯🇵 日本語</div>
+      <div class="lang-item">🇨🇳 中文(简体)</div>
+      <div class="lang-item">🇹🇼 中文(繁體)</div>
+    </div>
+    <button class="modal-close" onclick="closeModal('lang-modal')">닫기</button>
+  </div>
+</div>
+
+<!-- Cookie Modal -->
+<div id="cookie-modal" class="modal-overlay" onclick="closeModal('cookie-modal')">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <h3>🍪 쿠키 설정</h3>
+    <div style="display:flex;flex-direction:column;gap:16px;margin-bottom:16px">
+      <div class="drawer-option">
+        <label>필수 쿠키 (항상 활성)</label>
+        <div class="toggle on" style="opacity:0.5;cursor:not-allowed"></div>
+      </div>
+      <div class="drawer-option">
+        <label>분석 쿠키</label>
+        <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+      </div>
+      <div class="drawer-option">
+        <label>마케팅 쿠키</label>
+        <div class="toggle" onclick="this.classList.toggle('on')"></div>
+      </div>
+    </div>
+    <button class="modal-close" onclick="closeModal('cookie-modal')">저장 후 닫기</button>
+  </div>
+</div>
+
+<!-- Accessibility Drawer -->
+<div id="drawer-overlay" class="drawer-overlay" onclick="closeDrawer()">
+</div>
+<div id="accessibility-drawer" class="drawer">
+  <h3>♿ 접근성 설정</h3>
+  <div class="drawer-option">
+    <label>고대비 모드</label>
+    <div class="toggle" onclick="this.classList.toggle('on')"></div>
+  </div>
+  <div class="drawer-option">
+    <label>큰 텍스트</label>
+    <div class="toggle" onclick="this.classList.toggle('on')"></div>
+  </div>
+  <div class="drawer-option">
+    <label>애니메이션 줄이기</label>
+    <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+  </div>
+  <div class="drawer-option">
+    <label>화면 읽기 최적화</label>
+    <div class="toggle" onclick="this.classList.toggle('on')"></div>
+  </div>
+  <button class="drawer-close" onclick="closeDrawer()">닫기</button>
+</div>
+
+<script>
+  function showScreen(name) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.mockup-nav button').forEach(b => b.classList.remove('active'));
+    document.getElementById('screen-' + name).classList.add('active');
+    window.scrollTo(0, 0);
+
+    const map = {
+      'main': 0, 'search-result': 1, 'search-empty': 2,
+      'category': 3, 'contact': 4, 'thankyou': 5, 'refund': 6
+    };
+    const btns = document.querySelectorAll('.mockup-nav button');
+    if (map[name] !== undefined) btns[map[name]].classList.add('active');
+  }
+
+  function openModal(id) {
+    document.getElementById(id).classList.add('open');
+  }
+  function closeModal(id) {
+    document.getElementById(id).classList.remove('open');
+  }
+  function openDrawer() {
+    document.getElementById('drawer-overlay').classList.add('open');
+    document.getElementById('accessibility-drawer').classList.add('open');
+  }
+  function closeDrawer() {
+    document.getElementById('drawer-overlay').classList.remove('open');
+    document.getElementById('accessibility-drawer').classList.remove('open');
+  }
+</script>
+</body>
+</html>

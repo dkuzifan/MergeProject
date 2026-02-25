@@ -106,13 +106,32 @@ export default function Navbar() {
             <span className="relative z-10 text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 font-bold text-xl transition duration-300 cursor-default">
               pAI
             </span>
-            
+
             <div className="absolute top-full left-0 pt-4 w-48 hidden group-hover:block animation-fade-in">
               <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border border-white/40 dark:border-gray-700/50 rounded-2xl shadow-2xl overflow-hidden ring-1 ring-black/5">
                 <div className="p-2 space-y-1">
                   {/* 여기가 요청하신 0.1 ProtoType 메뉴입니다 */}
                   <Link href="/pAI/aiPrototype0_1" className="block px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-xl hover:bg-white/50 dark:hover:bg-gray-700/50 hover:text-blue-600 transition duration-200">
                     🤖 AI ProtoType 0.1
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* === CS 드롭다운 === */}
+          <div className="relative group py-4">
+            <Link href="/cs" className="relative z-10 text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 font-bold text-xl transition duration-300">
+              CS
+            </Link>
+            <div className="absolute top-full left-0 pt-4 w-48 hidden group-hover:block animation-fade-in">
+              <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border border-white/40 dark:border-gray-700/50 rounded-2xl shadow-2xl overflow-hidden ring-1 ring-black/5">
+                <div className="p-2 space-y-1">
+                  <Link href="/cs" className="block px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-xl hover:bg-white/50 dark:hover:bg-gray-700/50 hover:text-blue-600 transition duration-200">
+                    🏠 고객지원 홈
+                  </Link>
+                  <Link href="/cs/contact" className="block px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-xl hover:bg-white/50 dark:hover:bg-gray-700/50 hover:text-blue-600 transition duration-200">
+                    📬 문의하기
                   </Link>
                 </div>
               </div>

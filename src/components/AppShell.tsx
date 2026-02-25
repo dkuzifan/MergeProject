@@ -8,12 +8,22 @@ import Navbar from './Navbar'
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const isLoginPage = pathname === '/login'
+  const isCsPage = pathname.startsWith('/cs')
 
   if (isLoginPage) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50">
         {children}
       </div>
+    )
+  }
+
+  if (isCsPage) {
+    return (
+      <>
+        <Navbar />
+        <main>{children}</main>
+      </>
     )
   }
 
