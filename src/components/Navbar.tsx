@@ -133,6 +133,9 @@ export default function Navbar() {
                   <Link href="/cs/contact" className="block px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-xl hover:bg-white/50 dark:hover:bg-gray-700/50 hover:text-blue-600 transition duration-200">
                     📬 문의하기
                   </Link>
+                  <Link href="/cs/gacha-prob" className="block px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-xl hover:bg-white/50 dark:hover:bg-gray-700/50 hover:text-blue-600 transition duration-200">
+                    🎲 확률표
+                  </Link>
                 </div>
               </div>
             </div>

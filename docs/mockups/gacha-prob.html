@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>확률 공지 — 목업</title>
+  <style>
+    /* ── Reset & Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; }
+
+    /* ── Theme ── */
+    :root {
+      --bg-page:      #f8fafc;
+      --bg-header:    #ffffff;
+      --bg-nav:       #f1f5f9;
+      --bg-content:   #ffffff;
+      --bg-table-th:  #f1f5f9;
+      --bg-notes:     #f1f5f9;
+      --border:       #e2e8f0;
+      --text-main:    #1e293b;
+      --text-sub:     #475569;
+      --text-muted:   #94a3b8;
+      --text-yellow:  #b45309;
+      --nav-selected-bg:    #dbeafe;
+      --nav-selected-text:  #1d4ed8;
+      --nav-hover-bg:       #d1fae5;
+      --row-hover:    #f8fafc;
+    }
+    [data-theme="dark"] {
+      --bg-page:      #030712;
+      --bg-header:    #030712;
+      --bg-nav:       #1f2937;
+      --bg-content:   #030712;
+      --bg-table-th:  #1f2937;
+      --bg-notes:     #1f2937;
+      --border:       #374151;
+      --text-main:    #f1f5f9;
+      --text-sub:     #cbd5e1;
+      --text-muted:   #6b7280;
+      --text-yellow:  #fbbf24;
+      --nav-selected-bg:    #1e3a5f;
+      --nav-selected-text:  #93c5fd;
+      --nav-hover-bg:       #064e3b;
+      --row-hover:    #111827;
+    }
+
+    body { background: var(--bg-page); color: var(--text-main); min-height: 100vh; }
+
+    /* ── Header ── */
+    .page-header {
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 16px;
+    }
+    .page-header-inner { max-width: 860px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+    .page-header h1 { font-size: 1.125rem; font-weight: 700; }
+    .page-header p  { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+
+    /* ── Dark mode toggle ── */
+    .theme-btn {
+      padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--bg-nav); color: var(--text-sub); cursor: pointer; font-size: 0.75rem;
+      white-space: nowrap;
+    }
+    .theme-btn:hover { background: var(--nav-hover-bg); }
+
+    /* ── Main layout ── */
+    .wrapper { max-width: 860px; margin: 0 auto; padding: 16px; }
+
+    .container {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    /* ── Left nav ── */
+    .nav {
+      width: 22%;
+      min-width: 100px;
+      background: var(--bg-nav);
+      border-right: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .nav hr { border: none; border-top: 1px solid var(--border); }
+    .nav-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 8px 8px;
+      font-size: 0.72rem;
+      text-align: left;
+      background: none;
+      border: none;
+      color: var(--text-sub);
+      cursor: pointer;
+      line-height: 1.3;
+      transition: background 0.12s;
+    }
+    .nav-btn:hover    { background: var(--nav-hover-bg); }
+    .nav-btn.selected {
+      background: var(--nav-selected-bg);
+      color: var(--nav-selected-text);
+      font-weight: 600;
+    }
+    .nav-btn .icon { font-size: 0.95rem; flex-shrink: 0; line-height: 1; }
+
+    /* ── Right content ── */
+    .content {
+      flex: 1;
+      min-width: 0;
+      padding: 16px;
+      background: var(--bg-content);
+    }
+    .content-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: var(--text-main);
+    }
+
+    /* ── Description ── */
+    .desc-text { font-size: 0.8rem; color: var(--text-sub); line-height: 1.7; margin-bottom: 12px; }
+    .notes-box {
+      background: var(--bg-notes);
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+    .notes-box p { font-size: 0.72rem; color: var(--text-muted); line-height: 1.8; }
+
+    /* ── Table shared ── */
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.75rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 6px 8px;
+      text-align: left;
+      color: var(--text-main);
+    }
+    thead th {
+      background: var(--bg-table-th);
+      color: var(--text-sub);
+      font-weight: 600;
+    }
+    tbody tr:hover td { background: var(--row-hover); }
+    .rank-cell { color: var(--text-yellow); font-weight: 600; vertical-align: middle; }
+    .prob-cell { text-align: right; vertical-align: middle; white-space: nowrap; }
+    .col-rank  { width: 20%; }
+    .col-card  { width: 65%; }
+    .col-prob  { width: 15%; }
+    .col-item  { }
+    .col-prob2 { width: 20%; text-align: right; }
+
+    .notes-text { font-size: 0.7rem; color: var(--text-muted); margin-top: 8px; }
+
+    /* ── Footer ── */
+    .footer {
+      border-top: 1px solid var(--border);
+      padding: 12px 16px;
+      text-align: center;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 450px) {
+      html { font-size: 12px; }
+      .nav { width: 22%; min-width: 72px; }
+      .nav-btn { padding: 6px 5px; font-size: 0.65rem; gap: 3px; }
+      .content { padding: 10px 8px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- 헤더 -->
+<div class="page-header">
+  <div class="page-header-inner">
+    <div>
+      <h1>확률 공지</h1>
+      <p>카드팩 및 꾸러미 획득 확률 안내</p>
+    </div>
+    <button class="theme-btn" onclick="toggleTheme()">🌙 다크모드 전환</button>
+  </div>
+</div>
+
+<div class="wrapper">
+  <div class="container">
+
+    <!-- 좌측 네비게이션 -->
+    <nav class="nav" id="nav"></nav>
+
+    <!-- 우측 콘텐츠 -->
+    <main class="content" id="content"></main>
+
+  </div>
+</div>
+
+<!-- 푸터 (CS 레이아웃 CsFooter 대체) -->
+<footer class="footer">
+  © 2024 MergeProject. All rights reserved.
+</footer>
+
+<script>
+// ── 데이터 ──────────────────────────────────────────────
+const CONFIGS = [
+  {
+    id: 'description', name: '설명', icon: '📋', type: 'description',
+    description: '각 카드팩에서 획득 가능한 카드 목록과 확률을 안내합니다. 카드팩을 선택하면 해당 카드팩의 카드 목록과 각 카드의 획득 확률을 확인하실 수 있습니다.',
+    notes: '※ 확률은 소수점 세 자리까지 표시됩니다.\n※ 동일 등급 내 카드 확률의 합산은 해당 등급의 전체 확률과 일치합니다.\n※ 확률은 운영 정책에 따라 변경될 수 있습니다.',
+  },
+  { id:'pack-1', name:'카드팩 1', icon:'🃏', type:'card', notes:'※ 카드팩 1은 기본 카드팩입니다.',
+    groups:[
+      { rankLabel:'★★★★★', rankProb:'2.000%', cards:[{name:'카드 A',prob:'1.000%'},{name:'카드 B',prob:'1.000%'}] },
+      { rankLabel:'★★★★',  rankProb:'8.000%', cards:[{name:'카드 C',prob:'2.000%'},{name:'카드 D',prob:'2.000%'},{name:'카드 E',prob:'2.000%'},{name:'카드 F',prob:'2.000%'}] },
+      { rankLabel:'★★★',   rankProb:'20.000%',cards:[{name:'카드 G',prob:'5.000%'},{name:'카드 H',prob:'5.000%'},{name:'카드 I',prob:'5.000%'},{name:'카드 J',prob:'5.000%'}] },
+      { rankLabel:'★★',    rankProb:'30.000%',cards:[{name:'카드 K',prob:'10.000%'},{name:'카드 L',prob:'10.000%'},{name:'카드 M',prob:'10.000%'}] },
+      { rankLabel:'★',     rankProb:'40.000%',cards:[{name:'카드 N',prob:'20.000%'},{name:'카드 O',prob:'20.000%'}] },
+    ]
+  },
+  { id:'pack-2', name:'카드팩 2', icon:'🃏', type:'card',
+    groups:[
+      { rankLabel:'★★★★★', rankProb:'2.500%', cards:[{name:'카드 P',prob:'1.250%'},{name:'카드 Q',prob:'1.250%'}] },
+      { rankLabel:'★★★★',  rankProb:'7.500%', cards:[{name:'카드 R',prob:'2.500%'},{name:'카드 S',prob:'2.500%'},{name:'카드 T',prob:'2.500%'}] },
+      { rankLabel:'★★★',   rankProb:'20.000%',cards:[{name:'카드 U',prob:'6.667%'},{name:'카드 V',prob:'6.667%'},{name:'카드 W',prob:'6.666%'}] },
+      { rankLabel:'★★',    rankProb:'30.000%',cards:[{name:'카드 X',prob:'15.000%'},{name:'카드 Y',prob:'15.000%'}] },
+      { rankLabel:'★',     rankProb:'40.000%',cards:[{name:'카드 Z',prob:'20.000%'},{name:'카드 AA',prob:'20.000%'}] },
+    ]
+  },
+  { id:'pack-3', name:'카드팩 3', icon:'🃏', type:'card',
+    groups:[
+      { rankLabel:'★★★★★', rankProb:'3.000%', cards:[{name:'카드 AB',prob:'1.500%'},{name:'카드 AC',prob:'1.500%'}] },
+      { rankLabel:'★★★★',  rankProb:'7.000%', cards:[{name:'카드 AD',prob:'3.500%'},{name:'카드 AE',prob:'3.500%'}] },
+      { rankLabel:'★★★',   rankProb:'20.000%',cards:[{name:'카드 AF',prob:'5.000%'},{name:'카드 AG',prob:'5.000%'},{name:'카드 AH',prob:'5.000%'},{name:'카드 AI',prob:'5.000%'}] },
+      { rankLabel:'★★',    rankProb:'30.000%',cards:[{name:'카드 AJ',prob:'10.000%'},{name:'카드 AK',prob:'10.000%'},{name:'카드 AL',prob:'10.000%'}] },
+      { rankLabel:'★',     rankProb:'40.000%',cards:[{name:'카드 AM',prob:'20.000%'},{name:'카드 AN',prob:'20.000%'}] },
+    ]
+  },
+  { id:'pack-4', name:'카드팩 4', icon:'🃏', type:'card',
+    groups:[
+      { rankLabel:'★★★★★', rankProb:'1.500%', cards:[{name:'카드 AO',prob:'1.500%'}] },
+      { rankLabel:'★★★★',  rankProb:'8.500%', cards:[{name:'카드 AP',prob:'2.833%'},{name:'카드 AQ',prob:'2.833%'},{name:'카드 AR',prob:'2.834%'}] },
+      { rankLabel:'★★★',   rankProb:'20.000%',cards:[{name:'카드 AS',prob:'5.000%'},{name:'카드 AT',prob:'5.000%'},{name:'카드 AU',prob:'5.000%'},{name:'카드 AV',prob:'5.000%'}] },
+      { rankLabel:'★★',    rankProb:'30.000%',cards:[{name:'카드 AW',prob:'15.000%'},{name:'카드 AX',prob:'15.000%'}] },
+      { rankLabel:'★',     rankProb:'40.000%',cards:[{name:'카드 AY',prob:'20.000%'},{name:'카드 AZ',prob:'20.000%'}] },
+    ]
+  },
+  { id:'pack-5', name:'카드팩 5', icon:'🃏', type:'card',
+    groups:[
+      { rankLabel:'★★★★★', rankProb:'2.000%', cards:[{name:'카드 BA',prob:'1.000%'},{name:'카드 BB',prob:'1.000%'}] },
+      { rankLabel:'★★★★',  rankProb:'8.000%', cards:[{name:'카드 BC',prob:'2.000%'},{name:'카드 BD',prob:'2.000%'},{name:'카드 BE',prob:'2.000%'},{name:'카드 BF',prob:'2.000%'}] },
+      { rankLabel:'★★★',   rankProb:'20.000%',cards:[{name:'카드 BG',prob:'5.000%'},{name:'카드 BH',prob:'5.000%'},{name:'카드 BI',prob:'5.000%'},{name:'카드 BJ',prob:'5.000%'}] },
+      { rankLabel:'★★',    rankProb:'30.000%',cards:[{name:'카드 BK',prob:'10.000%'},{name:'카드 BL',prob:'10.000%'},{name:'카드 BM',prob:'10.000%'}] },
+      { rankLabel:'★',     rankProb:'40.000%',cards:[{name:'카드 BN',prob:'20.000%'},{name:'카드 BO',prob:'20.000%'}] },
+    ]
+  },
+  { id:'pack-6', name:'카드팩 6', icon:'🃏', type:'card',
+    groups:[
+      { rankLabel:'★★★★★', rankProb:'2.000%', cards:[{name:'카드 BP',prob:'1.000%'},{name:'카드 BQ',prob:'1.000%'}] },
+      { rankLabel:'★★★★',  rankProb:'8.000%', cards:[{name:'카드 BR',prob:'2.000%'},{name:'카드 BS',prob:'2.000%'},{name:'카드 BT',prob:'2.000%'},{name:'카드 BU',prob:'2.000%'}] },
+      { rankLabel:'★★★',   rankProb:'20.000%',cards:[{name:'카드 BV',prob:'5.000%'},{name:'카드 BW',prob:'5.000%'},{name:'카드 BX',prob:'5.000%'},{name:'카드 BY',prob:'5.000%'}] },
+      { rankLabel:'★★',    rankProb:'30.000%',cards:[{name:'카드 BZ',prob:'10.000%'},{name:'카드 CA',prob:'10.000%'},{name:'카드 CB',prob:'10.000%'}] },
+      { rankLabel:'★',     rankProb:'40.000%',cards:[{name:'카드 CC',prob:'20.000%'},{name:'카드 CD',prob:'20.000%'}] },
+    ]
+  },
+  { id:'xl-pack-1', name:'XL 카드팩 1', icon:'✨', type:'card', notes:'※ XL 카드팩은 일반 카드팩보다 고등급 확률이 높습니다.',
+    groups:[
+      { rankLabel:'★★★★★', rankProb:'5.000%', cards:[{name:'XL 카드 A',prob:'2.500%'},{name:'XL 카드 B',prob:'2.500%'}] },
+      { rankLabel:'★★★★',  rankProb:'15.000%',cards:[{name:'XL 카드 C',prob:'5.000%'},{name:'XL 카드 D',prob:'5.000%'},{name:'XL 카드 E',prob:'5.000%'}] },
+      { rankLabel:'★★★',   rankProb:'30.000%',cards:[{name:'XL 카드 F',prob:'10.000%'},{name:'XL 카드 G',prob:'10.000%'},{name:'XL 카드 H',prob:'10.000%'}] },
+      { rankLabel:'★★',    rankProb:'50.000%',cards:[{name:'XL 카드 I',prob:'25.000%'},{name:'XL 카드 J',prob:'25.000%'}] },
+    ]
+  },
+  { id:'xl-pack-2', name:'XL 카드팩 2', icon:'✨', type:'card',
+    groups:[
+      { rankLabel:'★★★★★', rankProb:'5.000%', cards:[{name:'XL 카드 K',prob:'2.500%'},{name:'XL 카드 L',prob:'2.500%'}] },
+      { rankLabel:'★★★★',  rankProb:'15.000%',cards:[{name:'XL 카드 M',prob:'5.000%'},{name:'XL 카드 N',prob:'5.000%'},{name:'XL 카드 O',prob:'5.000%'}] },
+      { rankLabel:'★★★',   rankProb:'30.000%',cards:[{name:'XL 카드 P',prob:'10.000%'},{name:'XL 카드 Q',prob:'10.000%'},{name:'XL 카드 R',prob:'10.000%'}] },
+      { rankLabel:'★★',    rankProb:'50.000%',cards:[{name:'XL 카드 S',prob:'25.000%'},{name:'XL 카드 T',prob:'25.000%'}] },
+    ]
+  },
+  { id:'xl-pack-3', name:'XL 카드팩 3', icon:'✨', type:'card',
+    groups:[
+      { rankLabel:'★★★★★', rankProb:'6.000%', cards:[{name:'XL 카드 U',prob:'3.000%'},{name:'XL 카드 V',prob:'3.000%'}] },
+      { rankLabel:'★★★★',  rankProb:'14.000%',cards:[{name:'XL 카드 W',prob:'7.000%'},{name:'XL 카드 X',prob:'7.000%'}] },
+      { rankLabel:'★★★',   rankProb:'30.000%',cards:[{name:'XL 카드 Y',prob:'10.000%'},{name:'XL 카드 Z',prob:'10.000%'},{name:'XL 카드 AA',prob:'10.000%'}] },
+      { rankLabel:'★★',    rankProb:'50.000%',cards:[{name:'XL 카드 AB',prob:'25.000%'},{name:'XL 카드 AC',prob:'25.000%'}] },
+    ]
+  },
+  { id:'xl-pack-4', name:'XL 카드팩 4', icon:'✨', type:'card',
+    groups:[
+      { rankLabel:'★★★★★', rankProb:'5.000%', cards:[{name:'XL 카드 AD',prob:'2.500%'},{name:'XL 카드 AE',prob:'2.500%'}] },
+      { rankLabel:'★★★★',  rankProb:'15.000%',cards:[{name:'XL 카드 AF',prob:'5.000%'},{name:'XL 카드 AG',prob:'5.000%'},{name:'XL 카드 AH',prob:'5.000%'}] },
+      { rankLabel:'★★★',   rankProb:'30.000%',cards:[{name:'XL 카드 AI',prob:'10.000%'},{name:'XL 카드 AJ',prob:'10.000%'},{name:'XL 카드 AK',prob:'10.000%'}] },
+      { rankLabel:'★★',    rankProb:'50.000%',cards:[{name:'XL 카드 AL',prob:'25.000%'},{name:'XL 카드 AM',prob:'25.000%'}] },
+    ]
+  },
+  { id:'xl-pack-5', name:'XL 카드팩 5', icon:'✨', type:'card',
+    groups:[
+      { rankLabel:'★★★★★', rankProb:'5.000%', cards:[{name:'XL 카드 AN',prob:'2.500%'},{name:'XL 카드 AO',prob:'2.500%'}] },
+      { rankLabel:'★★★★',  rankProb:'15.000%',cards:[{name:'XL 카드 AP',prob:'5.000%'},{name:'XL 카드 AQ',prob:'5.000%'},{name:'XL 카드 AR',prob:'5.000%'}] },
+      { rankLabel:'★★★',   rankProb:'30.000%',cards:[{name:'XL 카드 AS',prob:'10.000%'},{name:'XL 카드 AT',prob:'10.000%'},{name:'XL 카드 AU',prob:'10.000%'}] },
+      { rankLabel:'★★',    rankProb:'50.000%',cards:[{name:'XL 카드 AV',prob:'25.000%'},{name:'XL 카드 AW',prob:'25.000%'}] },
+    ]
+  },
+  { id:'xl-pack-6', name:'XL 카드팩 6', icon:'✨', type:'card',
+    groups:[
+      { rankLabel:'★★★★★', rankProb:'5.000%', cards:[{name:'XL 카드 AX',prob:'2.500%'},{name:'XL 카드 AY',prob:'2.500%'}] },
+      { rankLabel:'★★★★',  rankProb:'15.000%',cards:[{name:'XL 카드 AZ',prob:'5.000%'},{name:'XL 카드 BA',prob:'5.000%'},{name:'XL 카드 BB',prob:'5.000%'}] },
+      { rankLabel:'★★★',   rankProb:'30.000%',cards:[{name:'XL 카드 BC',prob:'10.000%'},{name:'XL 카드 BD',prob:'10.000%'},{name:'XL 카드 BE',prob:'10.000%'}] },
+      { rankLabel:'★★',    rankProb:'50.000%',cards:[{name:'XL 카드 BF',prob:'25.000%'},{name:'XL 카드 BG',prob:'25.000%'}] },
+    ]
+  },
+  { id:'bundle-1', name:'꾸러미 아이템 1', icon:'🎁', type:'bundle',
+    items:[{name:'아이템 A',prob:'30.000%'},{name:'아이템 B',prob:'25.000%'},{name:'아이템 C',prob:'20.000%'},{name:'아이템 D',prob:'15.000%'},{name:'아이템 E',prob:'10.000%'}]
+  },
+  { id:'bundle-2', name:'꾸러미 아이템 2', icon:'🎁', type:'bundle',
+    items:[{name:'아이템 F',prob:'35.000%'},{name:'아이템 G',prob:'30.000%'},{name:'아이템 H',prob:'20.000%'},{name:'아이템 I',prob:'10.000%'},{name:'아이템 J',prob:'5.000%'}]
+  },
+]
+
+// ── 상태 ──────────────────────────────────────────────────
+let selectedId = 'description'
+
+// ── 그룹 분류 ───────────────────────────────────────────
+const descItems    = CONFIGS.filter(c => c.type === 'description')
+const cardPacks    = CONFIGS.filter(c => c.type === 'card' && c.id.startsWith('pack-'))
+const xlPacks      = CONFIGS.filter(c => c.type === 'card' && c.id.startsWith('xl-'))
+const bundleItems  = CONFIGS.filter(c => c.type === 'bundle')
+
+// ── 네비 렌더 ───────────────────────────────────────────
+function renderNav() {
+  const nav = document.getElementById('nav')
+  const groups = [descItems, cardPacks, xlPacks, bundleItems]
+
+  nav.innerHTML = groups.map((group, gi) => {
+    const btns = group.map(item => `
+      <button class="nav-btn ${item.id === selectedId ? 'selected' : ''}"
+              onclick="select('${item.id}')">
+        <span class="icon">${item.icon}</span>
+        <span>${item.name}</span>
+      </button>`).join('')
+    return btns + (gi < groups.length - 1 ? '<hr>' : '')
+  }).join('')
+}
+
+// ── 콘텐츠 렌더 ─────────────────────────────────────────
+function renderContent() {
+  const cfg = CONFIGS.find(c => c.id === selectedId)
+  const el = document.getElementById('content')
+
+  let html = `<div class="content-title">${cfg.icon} ${cfg.name}</div>`
+
+  if (cfg.type === 'description') {
+    html += `<p class="desc-text">${cfg.description}</p>`
+    if (cfg.notes) {
+      html += `<div class="notes-box">${cfg.notes.split('\n').map(l => `<p>${l}</p>`).join('')}</div>`
+    }
+
+  } else if (cfg.type === 'card') {
+    html += `<div class="table-wrap"><table>
+      <thead><tr>
+        <th class="col-rank">희귀도</th>
+        <th class="col-card">카드</th>
+        <th class="col-prob">확률</th>
+      </tr></thead>
+      <tbody>`
+    cfg.groups.forEach(g => {
+      g.cards.forEach((card, i) => {
+        html += `<tr>`
+        if (i === 0) html += `<td class="rank-cell" rowspan="${g.cards.length}">${g.rankLabel}</td>`
+        html += `<td>${card.name}</td>`
+        if (i === 0) html += `<td class="prob-cell" rowspan="${g.cards.length}">${g.rankProb}</td>`
+        html += `</tr>`
+      })
+    })
+    html += `</tbody></table></div>`
+    if (cfg.notes) html += `<p class="notes-text">${cfg.notes}</p>`
+
+  } else if (cfg.type === 'bundle') {
+    html += `<div class="table-wrap"><table>
+      <thead><tr>
+        <th class="col-item">아이템 명칭</th>
+        <th class="col-prob2">확률</th>
+      </tr></thead>
+      <tbody>`
+    cfg.items.forEach(item => {
+      html += `<tr><td>${item.name}</td><td style="text-align:right">${item.prob}</td></tr>`
+    })
+    html += `</tbody></table></div>`
+  }
+
+  el.innerHTML = html
+}
+
+// ── 선택 핸들러 ─────────────────────────────────────────
+function select(id) {
+  selectedId = id
+  renderNav()
+  renderContent()
+}
+
+// ── 다크모드 토글 ────────────────────────────────────────
+function toggleTheme() {
+  const html = document.documentElement
+  const isDark = html.getAttribute('data-theme') === 'dark'
+  html.setAttribute('data-theme', isDark ? 'light' : 'dark')
+  document.querySelector('.theme-btn').textContent = isDark ? '🌙 다크모드 전환' : '☀️ 라이트모드 전환'
+}
+
+// ── 초기 렌더 ────────────────────────────────────────────
+renderNav()
+renderContent()
+</script>
+</body>
+</html>
