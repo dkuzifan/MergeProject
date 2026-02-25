@@ -12,10 +12,10 @@ export default function CsPage() {
         <SearchBar />
       </div>
       <div className="max-w-4xl mx-auto px-6 pb-16">
-        <div className="flex justify-end mb-8">
+        <div className="flex justify-center mb-10">
           <Link
             href="/cs/contact"
-            className="inline-flex items-center gap-2 border border-blue-500 text-blue-600 dark:text-blue-400 hover:bg-blue-500 hover:text-white dark:hover:text-white px-5 py-2 rounded-lg text-sm font-semibold transition-all"
+            className="inline-flex items-center gap-3 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white px-10 py-5 rounded-2xl text-lg font-extrabold shadow-lg hover:shadow-xl transition-all"
           >
             📬 문의 메일 보내기
           </Link>

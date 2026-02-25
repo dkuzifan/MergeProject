@@ -1,10 +1,10 @@
 import { createClient } from '@/utils/supabase/server'
+import { createAdminClient } from '@/utils/supabase/admin'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient()
-
   if (process.env.NODE_ENV !== 'development') {
+    const supabase = await createClient()
     const {
       data: { user },
       error: authError,
@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
   }
 
+  const supabase = createAdminClient()
   const { error } = await supabase.from('cs_submissions').insert({
     date_of_issue: dateOfIssue,
     topic,
