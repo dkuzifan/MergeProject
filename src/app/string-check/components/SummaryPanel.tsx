@@ -22,10 +22,8 @@ export default function SummaryPanel({ rows, onScrollToRow }: Props) {
     })
   }
 
-  // 이슈 그룹 계산
   const errorGroups: RowGroup[] = []
   const warningGroups: RowGroup[] = []
-  const translateGroups: RowGroup[] = []
   let totalErrors = 0
   let totalWarnings = 0
 
@@ -48,19 +46,6 @@ export default function SummaryPanel({ rows, onScrollToRow }: Props) {
       warningGroups.push({ index: row.index, items: warnings })
       totalWarnings += warnings.length
     }
-
-    // 번역 대상: 한국어 있고 다른 언어 중 하나라도 비어있는 행
-    if (row.cells[0]?.trim()) {
-      const missingCols = row.cells
-        .slice(1)
-        .map((c, i) => ({ colIdx: i + 1, label: LANG_MAP[i + 1].name, empty: !c?.trim() }))
-        .filter(({ empty }) => empty)
-        .map(({ colIdx, label }) => ({ colIdx, label }))
-
-      if (missingCols.length > 0) {
-        translateGroups.push({ index: row.index, items: missingCols })
-      }
-    }
   }
 
   function renderGroupList(
@@ -75,7 +60,6 @@ export default function SummaryPanel({ rows, onScrollToRow }: Props) {
       const isExpanded = expandedGroups.has(id)
       return (
         <li key={id}>
-          {/* 고정 높이 행: h-8 = 32px, 태그 overflow-hidden으로 1줄 유지 */}
           <div
             className="flex items-center gap-2 px-2 h-8 rounded-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             onClick={() => toggleGroup(id)}
@@ -87,7 +71,6 @@ export default function SummaryPanel({ rows, onScrollToRow }: Props) {
             >
               {group.index}
             </button>
-            {/* overflow-hidden으로 태그 줄바꿈 방지 */}
             <div className="flex items-center gap-1 flex-1 min-w-0 overflow-hidden">
               {group.items.map((item) => (
                 <span
@@ -104,7 +87,6 @@ export default function SummaryPanel({ rows, onScrollToRow }: Props) {
             </div>
             <span className={`text-[10px] text-gray-400 flex-shrink-0 transition-transform duration-150 ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
           </div>
-          {/* 토글 확장 영역 */}
           {isExpanded && (
             <div className="flex flex-col pl-7 pb-1">
               {group.items.map((item) => (
@@ -180,36 +162,12 @@ export default function SummaryPanel({ rows, onScrollToRow }: Props) {
         )}
       </div>
 
-      {/* 🔵 번역 대상 */}
-      <div className="min-w-[220px] flex-1 h-48 flex flex-col bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm">
-        <div className="flex items-center gap-2 mb-2 font-semibold text-sm text-gray-800 dark:text-white flex-shrink-0">
-          🔵 번역 대상
-          <span className="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700 rounded-full px-2 py-0.5 text-xs font-bold">
-            {translateGroups.length}행
-          </span>
-        </div>
-        {translateGroups.length === 0 ? (
-          <p className="text-xs text-gray-400 dark:text-gray-500 pl-1">번역 대상 없음</p>
-        ) : (
-          <ul className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-0.5">
-            {renderGroupList(
-              translateGroups,
-              'trans',
-              'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700',
-              'bg-blue-500',
-              () => '번역 필요',
-            )}
-          </ul>
-        )}
-      </div>
-
       {/* 📊 현황 */}
       <div className="w-44 flex-shrink-0 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm">
         <div className="mb-2 font-semibold text-sm text-gray-800 dark:text-white">📊 현황</div>
         <div className="flex flex-col gap-2 text-xs">
           {[
             { label: '전체 행', value: rows.length, color: 'text-gray-700 dark:text-gray-300' },
-            { label: '번역 대상', value: translateGroups.length, color: 'text-blue-600 dark:text-blue-400' },
             { label: '오류', value: totalErrors, color: 'text-red-600 dark:text-red-400' },
             { label: '경고', value: totalWarnings, color: 'text-yellow-600 dark:text-yellow-400' },
           ].map(({ label, value, color }) => (

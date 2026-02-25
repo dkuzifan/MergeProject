@@ -2,12 +2,13 @@
 
 import { useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
-import type { WorkBook } from 'xlsx'
 import { detectIssues } from '../lib/detectIssues'
 import type { SheetData, StringRow } from '../types'
 
+const TARGET_SHEETS = ['string_local', 'string_server']
+
 interface Props {
-  onUpload: (sheets: SheetData[], workbook: WorkBook, fileName: string) => void
+  onUpload: (sheets: SheetData[], fileName: string) => void
 }
 
 function parseSheet(ws: XLSX.WorkSheet): StringRow[] | null {
@@ -24,7 +25,6 @@ function parseSheet(ws: XLSX.WorkSheet): StringRow[] | null {
       index: String(row[0] ?? ''),
       cells: Array.from({ length: 10 }, (_, i) => String(row[i + 1] ?? '')),
       issues: {},
-      translateFailed: {},
     }))
 
   if (dataRows.length === 0) return null
@@ -49,20 +49,23 @@ export default function UploadScreen({ onUpload }: Props) {
         const data = new Uint8Array(e.target!.result as ArrayBuffer)
         const workbook = XLSX.read(data, { type: 'array' })
 
-        // 유효한 시트만 파싱 (구조 검증 통과한 시트)
         const validSheets: SheetData[] = []
         for (const sheetName of workbook.SheetNames) {
+          if (!TARGET_SHEETS.some((t) => sheetName.toLowerCase() === t.toLowerCase())) continue
           const ws = workbook.Sheets[sheetName]
           const rows = parseSheet(ws)
           if (rows) validSheets.push({ name: sheetName, rows })
         }
 
         if (validSheets.length === 0) {
-          setError('유효한 시트를 찾을 수 없습니다. 4행부터 데이터가 있고 A~K 컬럼 구조를 가진 시트가 필요합니다.')
+          setError(
+            'string_local 또는 string_server 시트를 찾을 수 없습니다. ' +
+            '4행부터 데이터가 있고 A~K 컬럼 구조를 갖춰야 합니다.',
+          )
           return
         }
 
-        onUpload(validSheets, workbook, file.name)
+        onUpload(validSheets, file.name)
       } catch {
         setError('파일을 읽는 중 오류가 발생했습니다.')
       }
@@ -113,7 +116,9 @@ export default function UploadScreen({ onUpload }: Props) {
           </svg>
           파일 선택
         </button>
-        <p className="mt-4 text-xs text-gray-400">.xlsx 파일만 지원 · STRING_LOCAL / STRING_SERVER 시트 자동 인식 · 브라우저 내 처리</p>
+        <p className="mt-4 text-xs text-gray-400">
+          .xlsx 파일만 지원 · string_local / string_server 시트 자동 인식 · 브라우저 내 처리
+        </p>
       </div>
 
       {error && (
