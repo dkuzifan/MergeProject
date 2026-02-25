@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git restore:*)",
+      "Bash(git rm:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run lint)",
+      "Bash(npx next build:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx skills:*)",
+      "Bash(npx ctx7:*)",
+      "Bash(npx kill-port:*)",
+      "Bash(claude install:*)",
+      "Bash(claude mcp:*)",
+      "Bash(claude mcp add:*)",
+      "Bash(node:*)",
+      "Bash(echo:*)",
+      "Bash(powershell -Command:*)",
+      "WebSearch",
+      "WebFetch(domain:ai.google.dev)",
+      "mcp__sequential-thinking__sequentialthinking",
+      "mcp__notion__notion-fetch",
+      "mcp__notion__notion-search"
+    ]
+  }
+}
