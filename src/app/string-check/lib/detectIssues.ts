@@ -1,10 +1,11 @@
-import { detect } from 'tinyld'
-import { LANG_MAP, type StringRow, type CellIssue } from '../types'
+import { type StringRow, type CellIssue } from '../types'
 
-const MIN_DETECT_LENGTH = 5
+// 공용 외래어 판정 임계값: 9개 비한국어 언어 중 이 수 이상이 동일 값이면 외래어로 간주
+const LOANWORD_THRESHOLD = 4
 
 /**
- * 행 목록을 순회하며 각 셀의 이슈(빈 셀·언어 오류·공용 외래어)를 감지하여 반환한다.
+ * 행 목록을 순회하며 각 셀의 이슈(빈 셀·공용 외래어)를 감지하여 반환한다.
+ * 언어 오류 검사는 Gemini API(/api/string-check/lang-check)가 담당한다.
  * 원본 rows를 변경하지 않고 새 배열로 반환한다.
  */
 export function detectIssues(rows: StringRow[]): StringRow[] {
@@ -17,39 +18,16 @@ export function detectIssues(rows: StringRow[]): StringRow[] {
       const val = row.cells[col]?.trim()
       if (!val) continue
       const sameCount = nonKorean.filter((c) => c?.trim() === val).length
-      if (sameCount >= 6) {
+      if (sameCount >= LOANWORD_THRESHOLD) {
         issues[col] = { type: 'warning', reason: 'loanword', matchCount: sameCount }
       }
     }
 
-    const hasKorean = !!row.cells[0]?.trim()
-
-    // ② 빈 셀 + 언어 오류 검사 (col 0~9 전체)
+    // ② 빈 셀 검사 (col 0~9 전체)
     for (let col = 0; col <= 9; col++) {
-      const val = row.cells[col]?.trim()
-
+      const val = row.cells[col]?.replace(/[\r\n]+/g, ' ').trim()
       if (!val) {
-        // 한국어(col 0)가 있고 외국어 셀이 비어있으면 번역 대상 — 오류 아님
-        // 오류는 한국어 셀 자체가 비어있거나, 한국어도 없는데 외국어 셀이 비어있는 경우
-        if (col === 0 || !hasKorean) {
-          issues[col] = { type: 'error', reason: 'empty' }
-        }
-        continue
-      }
-
-      // loanword 경고 셀은 언어 오류 검사 제외
-      if (issues[col]?.reason === 'loanword') continue
-
-      // 너무 짧은 셀은 신뢰도 부족으로 건너뜀
-      if (val.length < MIN_DETECT_LENGTH) continue
-
-      const detected = detect(val)
-      if (!detected) continue
-
-      const expected = LANG_MAP[col].tinyld
-      // 중국어: tinyld는 zh-TW/zh-CN 구분 없이 'zh' 반환 → 모두 정상 처리
-      if (detected !== expected) {
-        issues[col] = { type: 'error', reason: 'wrong-lang', detected }
+        issues[col] = { type: 'error', reason: 'empty' }
       }
     }
 

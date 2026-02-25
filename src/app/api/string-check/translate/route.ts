@@ -26,10 +26,12 @@ async function callGemini(model: string, body: string, apiKey: string) {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (process.env.NODE_ENV !== 'development') {
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
   }
 
   const { text, targets } = await request.json()

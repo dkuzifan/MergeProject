@@ -1,236 +1,126 @@
 'use client'
 
-import { useRef, useState } from 'react'
-import * as XLSX from 'xlsx'
-import type { WorkBook } from 'xlsx'
-import { LANG_MAP, type SheetData, type StringRow } from './types'
-import { detectIssues } from './lib/detectIssues'
-import { findExistingTranslations } from './lib/findExistingTranslations'
+import { useState } from 'react'
+import { LANG_MAP, type SheetData } from './types'
 import UploadScreen from './components/UploadScreen'
 import SummaryPanel from './components/SummaryPanel'
 import StringTable from './components/StringTable'
+
+const BATCH_SIZE = 40
 
 export default function StringCheckPage() {
   const [phase, setPhase] = useState<'upload' | 'table'>('upload')
   const [sheets, setSheets] = useState<SheetData[]>([])
   const [activeSheetName, setActiveSheetName] = useState<string>('')
-  const [originalWorkbook, setOriginalWorkbook] = useState<WorkBook | null>(null)
   const [fileName, setFileName] = useState('')
-  // 시트별 번역 중인 rowIndex Set
-  const [translatingRows, setTranslatingRows] = useState<Record<string, Set<string>>>({})
-
-  // ref: async 핸들러에서 항상 최신 sheets를 참조
-  const sheetsRef = useRef<SheetData[]>([])
+  const [isChecking, setIsChecking] = useState(false)
+  const [checkProgress, setCheckProgress] = useState({ done: 0, total: 0 })
+  const [checkError, setCheckError] = useState('')
 
   const activeRows = sheets.find((s) => s.name === activeSheetName)?.rows ?? []
 
-  function getSheetRows(sheetName: string): StringRow[] {
-    return sheetsRef.current.find((s) => s.name === sheetName)?.rows ?? []
-  }
-
-  function updateSheetRows(sheetName: string, newRows: StringRow[]) {
-    const newSheets = sheetsRef.current.map((s) =>
-      s.name === sheetName ? { ...s, rows: newRows } : s,
-    )
-    sheetsRef.current = newSheets
-    setSheets(newSheets)
-  }
-
-  function handleUpload(uploadedSheets: SheetData[], workbook: WorkBook, uploadedFileName: string) {
-    sheetsRef.current = uploadedSheets
+  function handleUpload(uploadedSheets: SheetData[], uploadedFileName: string) {
     setSheets(uploadedSheets)
     setActiveSheetName(uploadedSheets[0]?.name ?? '')
-    setOriginalWorkbook(workbook)
     setFileName(uploadedFileName)
-    setTranslatingRows({})
     setPhase('table')
+    runLangCheck(uploadedSheets)
+  }
+
+  async function runLangCheck(uploadedSheets: SheetData[]) {
+    const totalRows = uploadedSheets.reduce((sum, s) => sum + s.rows.length, 0)
+    setIsChecking(true)
+    setCheckProgress({ done: 0, total: totalRows })
+    setCheckError('')
+
+    let doneRows = 0
+
+    for (const sheet of uploadedSheets) {
+      const rows = sheet.rows
+
+      for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+        const batchRows = rows.slice(i, i + BATCH_SIZE)
+
+        // 빈 셀·외래어 제외한 셀만 전송
+        const requestRows = batchRows
+          .map((row) => {
+            const cells: Array<{ colIdx: number; text: string; lang: string; langName: string }> = []
+            for (let colIdx = 0; colIdx <= 9; colIdx++) {
+              const issue = row.issues[colIdx]
+              if (issue?.reason === 'empty' || issue?.reason === 'loanword') continue
+              const text = row.cells[colIdx]?.replace(/[\r\n]+/g, ' ').trim()
+              if (!text) continue
+              cells.push({
+                colIdx,
+                text,
+                lang: LANG_MAP[colIdx].google,
+                langName: LANG_MAP[colIdx].name,
+              })
+            }
+            return { index: row.index, cells }
+          })
+          .filter((r) => r.cells.length > 0)
+
+        if (requestRows.length === 0) {
+          doneRows += batchRows.length
+          setCheckProgress({ done: doneRows, total: totalRows })
+          continue
+        }
+
+        try {
+          const res = await fetch('/api/string-check/lang-check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rows: requestRows }),
+          })
+
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({})) as { error?: string }
+            throw new Error(errData.error ?? `HTTP ${res.status}`)
+          }
+
+          const { issues } = await res.json() as {
+            issues: Array<{ rowIndex: string; colIdx: number; detected: string }>
+          }
+
+          if (issues.length > 0) {
+            setSheets((prev) =>
+              prev.map((s) => {
+                if (s.name !== sheet.name) return s
+                return {
+                  ...s,
+                  rows: s.rows.map((r) => {
+                    const rowIssues = issues.filter((iss) => iss.rowIndex === r.index)
+                    if (rowIssues.length === 0) return r
+                    const newIssues = { ...r.issues }
+                    for (const iss of rowIssues) {
+                      // loanword 경고 셀은 wrong-lang으로 덮어쓰지 않음
+                      if (newIssues[iss.colIdx]?.reason === 'loanword') continue
+                      newIssues[iss.colIdx] = { type: 'error', reason: 'wrong-lang', detected: iss.detected }
+                    }
+                    return { ...r, issues: newIssues }
+                  }),
+                }
+              }),
+            )
+          }
+
+          doneRows += batchRows.length
+          setCheckProgress({ done: doneRows, total: totalRows })
+        } catch (err) {
+          const message = err instanceof Error ? err.message : '알 수 없는 오류'
+          setCheckError(message)
+          setIsChecking(false)
+          return
+        }
+      }
+    }
+
+    setIsChecking(false)
   }
 
   function handleScrollToRow(index: string) {
     document.getElementById(`str-${index}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }
-
-  function handleCellEdit(rowIndex: string, colIdx: number, value: string) {
-    const newRows = getSheetRows(activeSheetName).map((row) => {
-      if (row.index !== rowIndex) return row
-      const newCells = [...row.cells]
-      newCells[colIdx] = value
-      const newFailed = { ...row.translateFailed }
-      delete newFailed[colIdx]
-      return { ...row, cells: newCells, translateFailed: newFailed }
-    })
-    updateSheetRows(activeSheetName, detectIssues(newRows))
-  }
-
-  async function translateRow(sheetName: string, rowIndex: string) {
-    const row = getSheetRows(sheetName).find((r) => r.index === rowIndex)
-    if (!row || !row.cells[0]?.trim()) return
-
-    const korText = row.cells[0]
-
-    if (korText.length > 2000) {
-      alert(`한국어 텍스트가 2,000자를 초과합니다 (${korText.length}자). 번역을 진행할 수 없습니다.`)
-      return
-    }
-
-    const targetCols = new Set<number>()
-    for (let i = 1; i <= 9; i++) {
-      if (!row.cells[i]?.trim() || row.translateFailed[i]) targetCols.add(i)
-    }
-    if (targetCols.size === 0) return
-
-    const targetColIndices = [...targetCols]
-
-    // 동일 시트 내 원문 재사용 탐지
-    const reused = findExistingTranslations(
-      getSheetRows(sheetName),
-      korText,
-      rowIndex,
-      targetColIndices,
-    )
-    const needApiCols = targetColIndices.filter((col) => !(col in reused))
-
-    if (Object.keys(reused).length > 0) {
-      const withReused = getSheetRows(sheetName).map((r) => {
-        if (r.index !== rowIndex) return r
-        const newCells = [...r.cells]
-        const newFailed = { ...r.translateFailed }
-        for (const [col, val] of Object.entries(reused)) {
-          newCells[Number(col)] = val
-          delete newFailed[Number(col)]
-        }
-        return { ...r, cells: newCells, translateFailed: newFailed }
-      })
-      updateSheetRows(sheetName, detectIssues(withReused))
-    }
-
-    if (needApiCols.length === 0) return
-
-    setTranslatingRows((prev) => ({
-      ...prev,
-      [sheetName]: new Set([...(prev[sheetName] ?? []), rowIndex]),
-    }))
-
-    try {
-      const targets = needApiCols.map((col) => LANG_MAP[col].google)
-      const res = await fetch('/api/string-check/translate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: korText, targets }),
-      })
-
-      const data: { translations?: Record<string, string>; error?: string } =
-        await res.json().catch(() => ({}))
-
-      if (!res.ok) {
-        const withFailed = getSheetRows(sheetName).map((r) => {
-          if (r.index !== rowIndex) return r
-          const newFailed = { ...r.translateFailed }
-          for (const col of needApiCols) newFailed[col] = true
-          return { ...r, translateFailed: newFailed }
-        })
-        updateSheetRows(sheetName, withFailed)
-        return
-      }
-
-      const translations = data.translations ?? {}
-      const withTranslated = getSheetRows(sheetName).map((r) => {
-        if (r.index !== rowIndex) return r
-        const newCells = [...r.cells]
-        const newFailed = { ...r.translateFailed }
-        for (const col of needApiCols) {
-          const lang = LANG_MAP[col].google
-          if (translations[lang]) {
-            newCells[col] = translations[lang]
-            delete newFailed[col]
-          } else {
-            newFailed[col] = true
-          }
-        }
-        return { ...r, cells: newCells, translateFailed: newFailed }
-      })
-      updateSheetRows(sheetName, detectIssues(withTranslated))
-    } catch {
-      const withFailed = getSheetRows(sheetName).map((r) => {
-        if (r.index !== rowIndex) return r
-        const newFailed = { ...r.translateFailed }
-        for (const col of needApiCols) newFailed[col] = true
-        return { ...r, translateFailed: newFailed }
-      })
-      updateSheetRows(sheetName, withFailed)
-    } finally {
-      setTranslatingRows((prev) => {
-        const next = new Set(prev[sheetName] ?? [])
-        next.delete(rowIndex)
-        return { ...prev, [sheetName]: next }
-      })
-    }
-  }
-
-  async function translateSelected(rowIndices: string[]) {
-    for (const rowIndex of rowIndices) {
-      await translateRow(activeSheetName, rowIndex)
-    }
-  }
-
-  async function translateAll() {
-    const sheetRows = getSheetRows(activeSheetName)
-    const translatableRows = sheetRows.filter(
-      (r) => r.cells[0]?.trim() && r.cells.slice(1).some((c) => !c?.trim()),
-    )
-    if (translatableRows.length === 0) return
-
-    const totalChars = translatableRows.reduce((sum, r) => sum + (r.cells[0]?.length ?? 0), 0)
-    const confirmed = window.confirm(
-      `[${activeSheetName}] ${translatableRows.length}개 행을 번역합니다.\n예상 소비 글자 수: 약 ${totalChars.toLocaleString()}자\n\n계속하시겠습니까?`,
-    )
-    if (!confirmed) return
-
-    for (const row of translatableRows) {
-      await translateRow(activeSheetName, row.index)
-    }
-  }
-
-  function handleDownload() {
-    if (!originalWorkbook || sheets.length === 0) return
-
-    const wbData = XLSX.write(originalWorkbook, { bookType: 'xlsx', type: 'array' })
-    const wb = XLSX.read(wbData, { type: 'array' })
-
-    // 모든 시트 업데이트
-    for (const sheet of sheetsRef.current) {
-      const ws = wb.Sheets[sheet.name]
-      if (!ws) continue
-
-      const wsRange = XLSX.utils.decode_range(ws['!ref'] ?? 'A1')
-      const indexToXlsxRow = new Map<string, number>()
-      for (let r = 3; r <= wsRange.e.r; r++) {
-        const cell = ws[XLSX.utils.encode_cell({ r, c: 0 })]
-        if (cell?.v != null) indexToXlsxRow.set(String(cell.v), r)
-      }
-
-      for (const row of sheet.rows) {
-        const r = indexToXlsxRow.get(row.index)
-        if (r === undefined) continue
-        for (let colIdx = 0; colIdx < 10; colIdx++) {
-          ws[XLSX.utils.encode_cell({ r, c: colIdx + 1 })] = {
-            v: row.cells[colIdx] ?? '',
-            t: 's',
-          }
-        }
-      }
-    }
-
-    const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
-    const blob = new Blob([buf], { type: 'application/octet-stream' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = fileName
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
   }
 
   if (phase === 'upload') {
@@ -238,7 +128,6 @@ export default function StringCheckPage() {
   }
 
   const totalRows = sheets.reduce((sum, s) => sum + s.rows.length, 0)
-  const activeTranslatingRows = translatingRows[activeSheetName] ?? new Set<string>()
 
   return (
     <div className="flex flex-col h-[calc(100vh-52px)]">
@@ -252,31 +141,17 @@ export default function StringCheckPage() {
             ({sheets.length}개 시트 · 총 {totalRows}행)
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              sheetsRef.current = []
-              setSheets([])
-              setActiveSheetName('')
-              setOriginalWorkbook(null)
-              setFileName('')
-              setTranslatingRows({})
-              setPhase('upload')
-            }}
-            className="text-xs px-3 py-1.5 rounded-md border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-          >
-            다시 업로드
-          </button>
-          <button
-            onClick={handleDownload}
-            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-green-600 text-white hover:bg-green-700 font-semibold transition-colors"
-          >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            xlsx 다운로드
-          </button>
-        </div>
+        <button
+          onClick={() => {
+            setSheets([])
+            setActiveSheetName('')
+            setFileName('')
+            setPhase('upload')
+          }}
+          className="text-xs px-3 py-1.5 rounded-md border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+        >
+          다시 업로드
+        </button>
       </div>
 
       {/* 시트 탭 */}
@@ -312,19 +187,32 @@ export default function StringCheckPage() {
         })}
       </div>
 
+      {/* AI 언어 검사 진행 배너 */}
+      {isChecking && (
+        <div className="flex items-center gap-2 px-6 py-2 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-sm flex-shrink-0">
+          <svg
+            className="animate-spin w-4 h-4 flex-shrink-0"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          AI 언어 검사 중... ({checkProgress.done}/{checkProgress.total}행)
+        </div>
+      )}
+      {checkError && (
+        <div className="flex items-center gap-2 px-6 py-2 bg-red-50 dark:bg-red-900/20 border-b border-red-100 dark:border-red-800 text-red-700 dark:text-red-300 text-sm flex-shrink-0">
+          언어 검사 실패: {checkError} — 빈 셀·외래어 검사만 표시됩니다.
+        </div>
+      )}
+
       {/* 요약 패널 */}
       <SummaryPanel rows={activeRows} onScrollToRow={handleScrollToRow} />
 
       {/* 문자열 테이블 */}
-      <StringTable
-        key={activeSheetName}
-        rows={activeRows}
-        translatingRows={activeTranslatingRows}
-        onTranslateRow={(index) => translateRow(activeSheetName, index)}
-        onTranslateAll={translateAll}
-        onTranslateSelected={translateSelected}
-        onCellEdit={handleCellEdit}
-      />
+      <StringTable key={activeSheetName} rows={activeRows} />
     </div>
   )
 }
