@@ -1,8 +1,8 @@
 ---
-title: 스트링 체크 & 번역 - Tech Spec
+title: 스트링 체크 - Tech Spec
 date: 2026-02-18
 prd: docs/prd/260218-string-check.md
-status: draft
+status: implemented
 ---
 
 ## 의존성 분석 및 기술 설계 (Dependency Analysis & Technical Design)
@@ -16,17 +16,23 @@ status: draft
 | 인증 게이트 | `src/proxy.ts` — 미인증 시 `/login` 리디렉션 | ✅ `/string-check` 자동 보호 |
 | 상태 관리 | 페이지 내 useState (외부 라이브러리 없음) | ✅ 동일 패턴 사용 |
 | DB 사용 | Supabase | ⛔ 이 기능은 DB 사용 없음 (브라우저 내 처리) |
-| xlsx | ❌ 미설치 | 🔧 `xlsx` (SheetJS) 신규 설치 필요 |
-| 언어 감지 | ❌ 미설치 | 🔧 `tinyld` 신규 설치 필요 |
-| 번역 | ❌ 미설치 | 🔧 Gemini REST API (서버 프록시 경유, 게임 문맥 반영 번역) |
+| xlsx | ❌ 미설치 → 설치 완료 | ✅ `xlsx` (SheetJS) |
+| 언어 감지 | ❌ 미설치 | ✅ Gemini API (`/api/string-check/lang-check`) |
+| 번역 | - | ⛔ 제거됨 — 검사 전용으로 범위 축소 |
 
 ### API
 
-- **신규**: `POST /api/string-check/translate`
-  - Gemini API 키를 서버에서만 보관하기 위한 프록시 라우트
-  - 클라이언트에서 번역 요청 → 서버가 Gemini API 호출 → 결과 반환
-  - 1회 API 호출로 9개 언어 번역 동시 처리 (게임 용어·맥락 반영 시스템 프롬프트 적용)
+- **`POST /api/string-check/lang-check`** (신규, 사용 중)
+  - 파싱 완료 후 자동 호출되는 Gemini AI 언어 검사 프록시 라우트
+  - 클라이언트가 40행 단위(BATCH_SIZE)로 배치 전송 → 서버가 Gemini API 호출 → 언어 오류 목록 반환
+  - 빈 셀·공용 외래어 셀은 사전에 제외하고 전송 (불필요한 API 호출 방지)
+  - 모델 폴백: `gemini-3-pro-preview` → 503 시 `gemini-2.5-pro`
   - 클라이언트에 API 키 노출 없음
+
+- **`POST /api/string-check/translate`** (기존, 현재 UI 미사용)
+  - Gemini 기반 번역 API 라우트. 코드는 유지되어 있으나 현재 페이지 UI에서 호출하지 않음.
+  - 번역 기능이 이번 범위에서 제외된 상태.
+
 - **기존 API 변경 없음** (auth API 등 그대로)
 
 ### DB
@@ -37,33 +43,35 @@ status: draft
 
 ### Domain (핵심 로직)
 
-세 가지 순수 JS 함수 모듈로 분리:
+두 가지 모듈로 분리:
 
-1. **xlsx 파싱** (`parseXlsx`): SheetJS `read()` → 전체 시트 순회 → 유효한 시트(4행~, A~K 11컬럼)만 파싱 → `SheetData[]` 반환
-2. **오류/경고 감지** (`detectIssues`): 행·셀 단위 순회
+1. **xlsx 파싱** (UploadScreen 내 처리): SheetJS `read()` → 전체 시트 순회 → 유효한 시트(4행~, A~K 11컬럼)만 파싱 → `SheetData[]` 반환
+2. **오류/경고 감지** (`lib/detectIssues.ts`): 행·셀 단위 순회
+   - 공용 외래어 감지: 9개 비한국어 언어 중 4개 이상 동일 표현 → `warning: 'loanword'`
    - 빈 셀 감지 → `error: 'empty'`
-   - 언어 오류 감지: `tinyld.detect(cellValue)` → 기대 언어 코드와 비교 → `error: 'wrong-lang'`
-   - 공용 외래어 감지: 같은 행 B열(한국어) 제외 9개 셀 중 6개 이상 동일 표현 → `warning: 'loanword'`
-3. **xlsx 다운로드** (`exportXlsx`): 현재 state → SheetJS `write()` → 브라우저 다운로드
+   - ⚠️ 언어 오류(`wrong-lang`)는 detectIssues에서 처리하지 않음 — Gemini API(`lang-check`) 가 담당
 
 ### UI
 
 - **신규 페이지**: `src/app/string-check/page.tsx`
-  - `'use client'` 컴포넌트 (파일 파싱, 편집, 상태 관리 모두 클라이언트)
+  - `'use client'` 컴포넌트 (파일 파싱, 상태 관리 모두 클라이언트)
   - 기존 `AppShell` 내에 포함 → Navbar 자동 표시
-  - 상태: `sheets: SheetData[]`, `activeSheetName: string`, `translatingRows: Record<sheetName, Set<rowIndex>>`
+  - 상태: `phase`, `sheets: SheetData[]`, `activeSheetName`, `fileName`, `isChecking`, `checkProgress`, `checkError`
+  - 업로드 완료 즉시 `runLangCheck()` 호출 → 40행 배치로 `/api/string-check/lang-check` 순차 호출
   - 시트 탭 UI: 탭 클릭 → activeSheetName 변경 → SummaryPanel/StringTable 자동 갱신
-  - 다운로드: 모든 시트를 순회하여 원본 workbook에 반영 후 단일 xlsx 출력
+  - 표는 **읽기 전용** (인라인 편집, 번역, 다운로드 기능 없음)
+
 - **신규 컴포넌트** (`src/app/string-check/components/`):
   - `UploadScreen.tsx` — 드래그&드롭 업로드 UI, 전체 시트 파싱 후 유효 시트만 전달
-  - `SummaryPanel.tsx` — 오류/경고 요약 패널 (행 그룹 + 토글 + index 스크롤)
-  - `StringTable.tsx` — 11컬럼 표 (sticky 인덱스, 인라인 편집, 하이라이트, 체크박스 선택, 번역 버튼)
-    - Props: `selectedRows` 내부 state, `onTranslateSelected(rowIndices: string[])` 콜백
-    - 번역 대상 행에 체크박스 표시, 헤더에 전체선택 체크박스(indeterminate 지원)
-    - 선택된 행 초록 배경 하이라이트
-    - 1개 이상 선택 시 툴바에 "선택 번역 (N행)" 버튼(emerald) 표시
-    - 시트 전환 시 선택 초기화: `key={activeSheetName}`으로 컴포넌트 리마운트
-- **타입**: `SheetData { name: string; rows: StringRow[] }` 추가
+  - `SummaryPanel.tsx` — 오류/경고 요약 패널 (행 그룹 + index 스크롤)
+  - `StringTable.tsx` — 11컬럼 표 (sticky 인덱스, 하이라이트, 툴팁, 읽기 전용)
+
+- **신규 유틸** (`src/app/string-check/lib/`):
+  - `detectIssues.ts` — 클라이언트 사이드 빈 셀·공용 외래어 감지
+
+- **타입** (`src/app/string-check/types.ts`):
+  - `SheetData`, `StringRow`, `CellIssue`, `LANG_MAP` (tinyld 필드 없음, `col·name·google` 3개 필드)
+
 - **홈 페이지** (`src/app/page.tsx`): 스트링 체크 도구 카드 추가 (기존 도구 목록에 추가)
 
 ### Release Strategy
@@ -75,18 +83,17 @@ status: draft
 
 ---
 
-## 신규 설치 패키지
+## 설치 패키지
 
 ```bash
-npm install xlsx tinyld
+npm install xlsx
 ```
 
 | 패키지 | 용도 | 비고 |
 |--------|------|------|
 | `xlsx` (SheetJS) | xlsx 파일 파싱·생성 | MIT 라이선스, 브라우저·Node 모두 지원 |
-| `tinyld` | 통계 기반 언어 감지 | 50개 주요 언어, **CJS + ESM 모두 지원**, 짧은 텍스트에 최적화 |
 
-> **franc-min 대신 tinyld를 선택한 이유**: franc-min v6+는 ESM 전용으로 Next.js 서버 컴포넌트·API Route에서 빌드 오류 발생 가능성이 있음. tinyld는 CJS/ESM 모두 지원하여 빌드 이슈 없이 클라이언트·서버 양쪽에서 사용 가능. 또한 짧은 UI 문자열 감지 정확도가 더 높음.
+> **tinyld 미사용**: 초기에는 tinyld(통계 기반 언어 감지)를 검토했으나, 짧은 게임 UI 문자열에서의 오탐률이 높고 게임 용어·외래어 예외 처리가 어려워 Gemini AI 기반 검사로 전환.
 
 ---
 
@@ -96,77 +103,63 @@ npm install xlsx tinyld
 신규:
   src/app/string-check/
     page.tsx                         # 메인 페이지 (client component)
+    types.ts                         # SheetData, StringRow, CellIssue, LANG_MAP
+    lib/
+      detectIssues.ts                # 빈 셀·공용 외래어 클라이언트 감지
     components/
       UploadScreen.tsx               # 업로드 화면
       SummaryPanel.tsx               # 오류/경고 요약 패널
-      StringTable.tsx                # 스트링 표 + 인라인 편집
+      StringTable.tsx                # 스트링 표 (읽기 전용)
   src/app/api/string-check/
-    translate/route.ts               # Google Translate 프록시 API
+    lang-check/route.ts              # Gemini AI 언어 검사 프록시 (사용 중)
+    translate/route.ts               # Gemini 번역 프록시 (코드 유지, UI 미사용)
 
 수정:
   src/app/page.tsx                   # 홈에 스트링 체크 카드 추가
   .env.local                         # GEMINI_API_KEY 추가
-  package.json                       # xlsx, tinyld 추가
+  package.json                       # xlsx 추가
 ```
 
 ---
 
 ## Plan (Implementation Checklist)
 
-**P1: 환경 설정** ← 이후 모든 Phase의 선행 조건
-- [ ] Google AI Studio에서 Gemini API 키 발급
-- [ ] `GEMINI_API_KEY`를 `.env.local`과 Vercel 환경 변수에 등록
-- [ ] `xlsx`, `tinyld` 패키지 설치 (`npm install xlsx tinyld`)
-- [ ] `src/app/string-check/page.tsx` 빈 shell 생성, `src/app/page.tsx`에 도구 카드 추가
+**P1: 환경 설정**
+- [x] Google AI Studio에서 Gemini API 키 발급
+- [x] `GEMINI_API_KEY`를 `.env.local`과 Vercel 환경 변수에 등록
+- [x] `xlsx` 패키지 설치 (`npm install xlsx`)
+- [x] `src/app/string-check/page.tsx` 빈 shell 생성, `src/app/page.tsx`에 도구 카드 추가
 
-**P2: xlsx 파싱 및 표 렌더링** ← P1 완료 후
-- [ ] `UploadScreen`: 드래그&드롭 + 파일 선택, xlsx 포맷 검증 (확장자 + 파싱 시도)
-- [ ] SheetJS `read()`로 파일 파싱 — 4행(index 3)~부터 데이터 추출, A~K 컬럼 매핑
-- [ ] 파싱 실패(구조 불일치) 시 업로드 화면에 오류 메시지 표시
-- [ ] `StringTable`: 인덱스 + 10개 언어 컬럼, sticky 인덱스 열, 가로 스크롤
-- [ ] 파싱 완료 → 결과 화면 전환, Action Bar(파일명·버튼)·범례 렌더링
-- [ ] ✅ **검증**: 실제 string.xlsx 업로드 후 1000행 기준 3초 내 표 렌더링
+**P2: xlsx 파싱 및 표 렌더링**
+- [x] `UploadScreen`: 드래그&드롭 + 파일 선택, xlsx 포맷 검증 (확장자 + 파싱 시도)
+- [x] SheetJS `read()`로 파일 파싱 — 4행(index 3)~부터 데이터 추출, A~K 컬럼 매핑
+- [x] 파싱 실패(구조 불일치) 시 업로드 화면에 오류 메시지 표시
+- [x] `StringTable`: 인덱스 + 10개 언어 컬럼, sticky 인덱스 열, 가로 스크롤
+- [x] 파싱 완료 → 결과 화면 전환, 시트 탭 렌더링
 
-**P3: 오류·경고 감지** ← P2 완료 후
-- [ ] `detectIssues()` 함수 구현 — 3중 필터 포함 (공용 외래어 우선 → 최소 길이 → tinyld 감지)
-- [ ] 빈 셀 → red 하이라이트
-- [ ] 언어 오류 셀 → red + 호버 툴팁 ("감지된 언어: OO")
-- [ ] 공용 외래어 셀 → yellow + 호버 툴팁 ("공용 외래어 추정")
-- [ ] `SummaryPanel`: 행 단위 그룹, 언어 태그, 토글 펼치기/접기, index 클릭→해당 행 스크롤
-- [ ] `[오류 행만]` 토글 — 이슈 없는 행 숨김
-- [ ] ✅ **검증**: 빈 셀·언어 오류·공용 외래어 3가지 케이스 모두 정상 표시, 5자 미만 셀 오류 미표시
+**P3: 클라이언트 오류·경고 감지**
+- [x] `detectIssues()` 함수 구현 — 공용 외래어(loanword) 우선, 빈 셀 감지
+- [x] 빈 셀 → 레드 링 테두리
+- [x] 공용 외래어 셀 → 옐로 배경 + 툴팁 ("공용 외래어 추정")
+- [x] `SummaryPanel`: 오류/경고 그룹, index 클릭→해당 행 스크롤
 
-**P4-A: 번역 API Route 구현** ← P1 완료 후 (P3와 병렬 가능)
-- [ ] `/api/string-check/translate` Route Handler 구현
+**P4: Gemini AI 언어 검사 연동**
+- [x] `/api/string-check/lang-check` Route Handler 구현
   - Supabase 세션 검증 (미인증 시 401)
-  - 요청 text 500자 초과 시 413 반환
-  - Google Translate API v2 배치 호출 (1 text × 9 언어)
-  - 성공 시 `{ translations: { en: "...", fr: "...", ... } }` 반환
-  - Google API 오류 시 502 반환
-- [ ] ✅ **검증**: curl 또는 브라우저 DevTools로 API 직접 호출해 정상 응답 확인
-
-**P4-B: 번역 클라이언트 연결** ← P2 + P4-A 완료 후
-- [ ] 한국어만 있는 행 판별 로직 — 행 우측 [번역] 버튼 + 체크박스 표시 조건
-- [ ] `findExistingTranslations()` 구현 — 번역 전 동일 한국어 원문 행 검색, 재사용 가능한 언어 추출
-- [ ] 행 단위 [번역] 버튼 — 내부 재사용 먼저 적용 후, 남은 언어만 API 호출하여 빈 셀 채움
-- [ ] 체크박스 선택 번역 — 번역 대상 행에 체크박스, 헤더 전체선택(indeterminate), 선택 시 초록 "선택 번역 (N행)" 버튼
-- [ ] [전체 번역] 버튼 클릭 시 예상 문자 수 표시 (재사용 제외 후 실제 API 호출 예정 문자 수) + 사용자 확인 → 순차 처리
-- [ ] 번역 진행 중 상태 표시 (진행 중인 셀 파란 배경, 진행률 표시)
-- [ ] 번역 실패 셀 — 오렌지 테두리 + "번역 실패" 텍스트, 클릭 시 재시도
-- [ ] ✅ **검증**: 행 번역·전체 번역·내부 재사용·실패 재시도 모두 동작 확인
-
-**P5: 인라인 편집 및 다운로드** ← P2 완료 후
-- [ ] 셀 클릭 → input으로 전환 (인라인 편집 모드), 포커스 아웃/Enter로 확정
-- [ ] 편집 확정 시 `detectIssues()` 해당 행 재실행 → 하이라이트·요약 패널 즉시 업데이트
-- [ ] [다운로드] 버튼 — SheetJS `write()`로 현재 state → xlsx 내보내기
-  - 원본 1~3행(헤더/메타) 유지, 4행~부터 현재 편집 내용 반영
-- [ ] ✅ **검증**: 번역·편집 후 다운로드한 xlsx를 Excel/Sheets에서 열어 내용 확인
+  - 40행 배치 단위 수신, Gemini API 호출 (gemini-3-pro-preview → gemini-2.5-pro 폴백)
+  - `{"issues": [...]}` JSON 반환
+- [x] 클라이언트: 업로드 완료 즉시 `runLangCheck()` 자동 실행
+  - 빈 셀·외래어 셀 사전 제외 후 배치 전송
+  - 진행 배너 (파란 스피너 + N/전체행)
+  - 오류 시 빨간 배너 표시
+- [x] 언어 오류 셀 → 레드 배경 + 툴팁 ("언어 오류 (감지: OO)")
+  - loanword 경고 셀은 wrong-lang으로 덮어쓰지 않음
 
 ---
 
 ## 테스트 계획 (Test Plan)
 
-> 프로젝트에 테스트 프레임워크 없음 → 수동 시나리오 테스트로 진행. 각 항목에 **입력**과 **기대 결과**를 명시.
+> 프로젝트에 테스트 프레임워크 없음 → 수동 시나리오 테스트로 진행.
 
 ### 1. 핵심 기본 플로우 검증 (Regression)
 
@@ -181,7 +174,7 @@ npm install xlsx tinyld
 
 | # | 시나리오 | 입력 | 기대 결과 |
 |---|----------|------|-----------|
-| U1 | 정상 업로드 | 1000행 string.xlsx 드래그&드롭 | 3초 이내 표 렌더링 완료 |
+| U1 | 정상 업로드 | 1000행 string.xlsx 드래그&드롭 | 3초 이내 표 렌더링 완료, AI 검사 자동 시작 |
 | U2 | 포맷 오류 | `.csv` 파일 업로드 | "xlsx 파일만 지원합니다" 오류 메시지, 화면 유지 |
 | U3 | 구조 불일치 | 4행 미만이거나 11컬럼 미만인 xlsx | "파일 구조가 올바르지 않습니다" 오류 메시지 |
 
@@ -189,46 +182,22 @@ npm install xlsx tinyld
 
 | # | 시나리오 | 입력 | 기대 결과 |
 |---|----------|------|-----------|
-| D1 | 빈 셀 | 영어 컬럼이 비어있는 행 | 해당 셀 red, 요약 패널에 해당 행 표시 |
-| D2 | 언어 오류 | 일본어 컬럼에 한국어 텍스트 입력 | 해당 셀 red, 툴팁 "감지된 언어: 한국어" |
-| D3 | 공용 외래어 | "Tutorial"이 9개 컬럼 중 7개에 동일하게 입력 | 해당 셀 yellow, 툴팁 "공용 외래어 추정" |
-| D4 | 오탐 방지 — 짧은 셀 | 영어 컬럼에 "OK" (2자) 입력 | 언어 오류 표시 **없음** |
-| D5 | 오탐 방지 — 공용 외래어 우선 | "Beta"가 8/9 컬럼에 동일하게 있는 행의 스페인어 셀 | yellow 경고(loanword)만 표시, red 오류 없음 |
-| D6 | 요약 패널 토글 | 여러 이슈가 있는 행의 토글 버튼 클릭 | 언어별 상세 내용 펼치기/접기 동작 |
-| D7 | 요약 패널 스크롤 | 요약 패널의 index 링크 클릭 | 표에서 해당 행으로 스크롤, 1.5초 파란 하이라이트 |
-| D8 | 오류 행 필터 | `[오류 행만]` 토글 클릭 | 이슈 없는 행 숨김, 재클릭 시 전체 복원 |
-
-**번역**
-
-| # | 시나리오 | 입력 | 기대 결과 |
-|---|----------|------|-----------|
-| T1 | 행 번역 | 한국어만 있는 행의 [번역] 버튼 클릭 | 빈 9개 셀에 번역 결과 채워짐, 감지 결과 재계산 |
-| T2 | 내부 재사용 — 전체 일치 | 동일 한국어 원문이 다른 행에 번역 완료된 상태에서 [번역] 클릭 | API 호출 없이 즉시 번역 결과 채워짐 |
-| T3 | 내부 재사용 — 부분 일치 | 동일 한국어 원문 행에 일부 언어(예: 영어·일본어)만 번역된 경우 | 영어·일본어는 재사용, 나머지 7개 언어만 API 호출 |
-| T4 | 선택 번역 | 체크박스로 2개 행 선택 후 "선택 번역" 클릭 | 선택된 행만 번역, 선택 해제됨, 나머지 행 유지 |
-| T5 | 선택 전체 | 헤더 체크박스 클릭 | 번역 대상 전체 선택, 재클릭 시 전체 해제 |
-| T6 | 탭 전환 선택 초기화 | 행 선택 후 다른 시트 탭 클릭 | 선택 상태 초기화됨 |
-| T7 | 전체 번역 확인 UI | [전체 번역] 버튼 클릭 | 재사용 후 실제 API 호출 예정 문자 수 표시 + 확인/취소 선택지 노출 |
-| T8 | 전체 번역 진행 | 전체 번역 확인 후 진행 | 행 순차 처리, 진행 중인 행 파란 배경, 완료 행 정상 표시 |
-| T9 | 번역 실패 | API 오류 발생 (네트워크 차단 등) | 해당 셀 오렌지 테두리 + "번역 실패" 표시 |
-| T10 | 재시도 | 번역 실패 셀 클릭 | 해당 셀만 재번역 시도 (재사용 탐지 후 API 호출) |
-
-**편집 및 다운로드**
-
-| # | 시나리오 | 입력 | 기대 결과 |
-|---|----------|------|-----------|
-| E1 | 인라인 편집 | 셀 클릭 → 텍스트 수정 → Enter | 수정 내용 확정, 해당 행 감지 결과 즉시 재계산 |
-| E2 | 편집 취소 | 셀 클릭 후 Escape 또는 바깥 클릭 | 수정 내용 유지 (확정) 또는 취소 여부 결정 |
-| E3 | 다운로드 | [다운로드] 버튼 클릭 | xlsx 파일 다운로드, Excel/Sheets에서 열면 번역·편집 내용 반영 확인 |
-| E4 | 원본 헤더 유지 | 다운로드 후 Excel에서 확인 | 1~3행 헤더/메타 원본 그대로, 4행~부터 수정 내용 반영 |
+| D1 | 빈 셀 | 영어 컬럼이 비어있는 행 | 해당 셀 레드 링, 요약 패널에 해당 행 표시 |
+| D2 | 언어 오류 (AI) | 일본어 컬럼에 한국어 텍스트 입력 | AI 검사 완료 후 해당 셀 레드 배경, 툴팁 "언어 오류 (감지: 한국어)" |
+| D3 | 공용 외래어 | "Tutorial"이 9개 비한국어 컬럼 중 4개 이상에 동일하게 입력 | 해당 셀 옐로 배경 + 툴팁 "공용 외래어 추정" |
+| D4 | 오탐 방지 — 게임 용어 | 영어 컬럼에 "OK", "Level", "Boss" 등 | AI 검사에서 오류 미표시 |
+| D5 | 외래어 우선 처리 | loanword 경고 셀이 AI에서도 오류로 감지된 경우 | yellow 경고(loanword) 유지, wrong-lang으로 덮어쓰지 않음 |
+| D6 | AI 검사 배너 | 파일 업로드 직후 | 파란 배너 + "AI 언어 검사 중... (N/전체행)" 표시 |
+| D7 | AI 검사 오류 | 네트워크 차단 또는 API 키 미설정 | 빨간 배너 + 에러 메시지 + "빈 셀·외래어 검사만 표시됩니다" |
+| D8 | 요약 패널 스크롤 | 요약 패널의 index 링크 클릭 | 표에서 해당 행으로 스크롤 |
 
 ---
 
 ## 데이터 흐름 및 타입 명세
 
-> DB 없음 — 모든 데이터는 클라이언트 React state에만 존재. 서버는 Google Translate 프록시 역할만 함.
+> DB 없음 — 모든 데이터는 클라이언트 React state에만 존재. 서버는 Gemini AI 프록시 역할만 함.
 
-### Flow 1: 파일 업로드 → 파싱 → 감지
+### Flow 1: 파일 업로드 → 파싱 → 클라이언트 감지 → AI 검사
 
 ```
 [사용자] 파일 드롭 / 선택
@@ -255,135 +224,63 @@ StringRow[] 변환
   cells = row[1..10]  (B~K열, 10개)
     │
     ▼
-detectIssues(rows)                       ← 3중 필터 적용 (공용 외래어 → 최소 길이 → tinyld)
-→ 각 StringRow에 issues 채움
+detectIssues(rows)                       ← 클라이언트: 공용 외래어 + 빈 셀만
+→ 각 StringRow에 issues 채움 (loanword, empty)
     │
     ▼
-setState({ fileName, rows, originalWorkbook })
+setState({ fileName, sheets })
 → 결과 화면 렌더링
 
-※ originalWorkbook: 다운로드 시 1~3행 헤더 복원에 사용 — 업로드 시점에 보관
+→ runLangCheck() 자동 호출              ← AI 검사 시작
 ```
 
 ---
 
-### Flow 2: 번역 (행 단위 / 전체 일괄)
+### Flow 2: Gemini AI 언어 검사 (runLangCheck)
 
 ```
-[사용자] [번역] 또는 [전체 번역] 클릭
-    │
-    ├─ 전체 번역이면 → 예상 문자 수 계산 표시 + 사용자 확인
-    │                  취소 → 종료
+[페이지] 업로드 완료 → runLangCheck(uploadedSheets) 자동 실행
     │
     ▼
-번역 대상 행 목록 확정
-  (한국어 cells[0] 값 있음 AND 다른 언어 셀 중 1개 이상 빈 셀)
+모든 시트의 전체 행 수 계산 → setCheckProgress({ done: 0, total })
     │
-    ▼ (행별 순차 처리)
+    ▼ (시트별, 40행 배치 단위 반복)
 
-setState: translatingRows.add(row.index)  → 해당 행 파란 배경
+배치 구성:
+  빈 셀(empty) 셀 → 제외 (이미 레드 표시됨)
+  loanword 셀 → 제외 (이미 옐로 표시됨)
+  남은 비어있지 않은 셀만 → { colIdx, text, lang, langName }
+  requestRows가 비면 → 배치 스킵, doneRows += batchSize
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STEP A: 내부 번역 재사용 탐지  ← API 호출 전 먼저 실행
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-findExistingTranslations(rows, korText, targets):
-  전체 rows에서 cells[0] === korText 인 다른 행 검색
-  해당 행들에서 targets에 해당하는 언어 셀이 채워져 있으면 → 그 값 수집
-  → reused: { en: "...", fr: "..." }   (이미 채울 수 있는 언어)
-  → remaining: ["ja", "es", ...]       (여전히 비어있어 API 필요한 언어)
-
-reused가 있으면 → 해당 셀에 즉시 채움 (API 호출 없음, 비용 0)
-
-remaining이 비어있으면 → API 호출 생략, 완료
+    ▼
+fetch POST /api/string-check/lang-check
+  body: { rows: [{ index, cells: [{colIdx, text, lang, langName}] }] }
     │
-    ▼ remaining이 있을 때만
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STEP B: Google Translate API 호출
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-fetch POST /api/string-check/translate
-  body: { text: cells[0], targets: remaining }   ← 재사용 후 남은 언어만
-    │
-    ▼ [서버: route.ts]
+    ▼ [서버: lang-check/route.ts]
     │
     ├─ Supabase 세션 검증 실패 → 401
-    ├─ text.length > 500 → 413
+    ├─ rows 비어있음 → { issues: [] } 즉시 반환
     │
     ▼
-Google Translate API v2 호출 (remaining 언어 수 × 개별 요청)
-  ※ v2는 target을 하나만 받음 → 언어당 1 요청, Promise.all로 병렬 처리
-  GET https://translation.googleapis.com/language/translate/v2
-    ?q={text}&source=ko&target={langCode}&key={API_KEY}
+Gemini API 호출 (gemini-3-pro-preview 1순위, 503 시 gemini-2.5-pro 폴백)
+  system prompt: 언어 검증 전문가, 오탐 최소화 규칙 포함
+  user prompt: 각 셀의 기대 언어(langName)와 실제 텍스트 전달
+  responseMimeType: 'application/json', temperature: 0
     │
-    ├─ Google 오류 (429 할당량 초과 포함) → 502 반환
-    │
-    ▼
-{ translations: { ja: "...", es: "...", ... } } 반환
+    ├─ 성공: { issues: [{ rowIndex, colIdx, detected }] } 반환
+    └─ 실패(503 폴백 후 실패, 기타): 502 반환
     │
     ▼ [클라이언트]
     │
-    ├─ 성공: 남은 빈 셀에 번역 결과 채움
-    └─ 실패: 해당 셀 translateFailed 마킹 → 오렌지 테두리 + "번역 실패"
-
-전체 셀 채운 후 → detectIssues 해당 행 재실행
-setState: translatingRows.delete(row.index)
-→ 다음 행으로 이동 (전체 번역) 또는 완료
-```
-
-**재사용 탐지 효과:**
-- 동일 한국어 원문이 파일 내 여러 행에 중복되는 경우 (버튼 라벨, 공통 메시지 등)
-  API 호출 횟수 절감 → 비용 절감 + 번역 일관성 보장
-- 재사용 여부는 투명하게 처리 (사용자에게 별도 알림 없음)
-
----
-
-### Flow 3: 인라인 편집 → 감지 재계산
-
-```
-[사용자] 셀 클릭
+    ├─ 성공: 해당 시트 rows에서 rowIndex 매칭 → wrong-lang 이슈 추가
+    │        loanword 셀은 덮어쓰지 않음
+    ├─ 실패: setCheckError(message) → 빨간 배너 표시, 루프 중단
     │
     ▼
-setState: editingCell = { rowIdx, colIdx }
-→ 해당 td → <input> 전환, 기존 값으로 초기화
-    │
-    ▼ Enter 또는 포커스 아웃
-    │
-rows[rowIdx].cells[colIdx] = newValue    ← state 직접 갱신
-    │
-    ▼
-detectIssues([rows[rowIdx]])             ← 해당 행만 재실행 (전체 재실행 X)
-→ rows[rowIdx].issues 업데이트
-    │
-    ▼
-setState: editingCell = null, rows 업데이트
-→ StringTable + SummaryPanel 동시 리렌더
-```
+doneRows += batchSize → setCheckProgress 업데이트
+→ 다음 배치로 이동
 
----
-
-### Flow 4: xlsx 다운로드
-
-```
-[사용자] [다운로드] 클릭
-    │
-    ▼
-originalWorkbook 복사 (업로드 시 보관한 원본)
-→ 1~3행 헤더/메타 그대로 유지
-    │
-    ▼
-4행~의 각 셀을 현재 rows state 값으로 덮어쓰기
-  worksheet[A(n)] = row.index
-  worksheet[B(n)..K(n)] = row.cells[0..9]
-    │
-    ▼
-XLSX.write(workbook, { type: 'array', bookType: 'xlsx' })
-→ Uint8Array
-    │
-    ▼
-new Blob([data], { type: 'application/vnd.openxmlformats...' })
-→ URL.createObjectURL(blob)
-→ <a> 태그 programmatic click → 파일 다운로드
-파일명: {원본파일명}_translated.xlsx
+모든 배치 완료 → setIsChecking(false)
 ```
 
 ---
@@ -399,177 +296,92 @@ type CellIssue =
 
 // 파싱된 행
 interface StringRow {
-  index: string                   // A열 값 (예: "STR_0001")
-  cells: string[]                 // B~K 10개 언어 값 (순서 고정)
-  issues: Record<number, CellIssue>  // 컬럼 인덱스(0~9) → 이슈
+  index: string                       // A열 값 (예: "STR_0001")
+  cells: string[]                     // B~K 10개 언어 값 (순서 고정)
+  issues: Record<number, CellIssue>   // 컬럼 인덱스(0~9) → 이슈
 }
 
-// 페이지 상태
-interface StringCheckState {
-  fileName: string
+// 시트 데이터
+interface SheetData {
+  name: string
   rows: StringRow[]
-  originalWorkbook: import('xlsx').WorkBook | null  // 다운로드 시 1~3행 헤더 복원용
-  filterErrorOnly: boolean
-  translatingRows: Set<string>        // 번역 진행 중인 index 집합
-  editingCell: { rowIdx: number; colIdx: number } | null  // 인라인 편집 중인 셀
 }
 ```
 
 ### 언어 코드 매핑
 
 ```typescript
-// B~K 컬럼 순서, tinyld ISO 639-1 코드, Google Translate 코드 매핑
+// B~K 컬럼 순서, Gemini langName 및 Google Translate 코드 매핑
 const LANG_MAP = [
-  { col: 'B', name: '한국어',      tinyld: 'ko', google: 'ko'    },
-  { col: 'C', name: '영어',        tinyld: 'en', google: 'en'    },
-  { col: 'D', name: '프랑스어',    tinyld: 'fr', google: 'fr'    },
-  { col: 'E', name: '일본어',      tinyld: 'ja', google: 'ja'    },
-  { col: 'F', name: '스페인어',    tinyld: 'es', google: 'es'    },
-  { col: 'G', name: '독일어',      tinyld: 'de', google: 'de'    },
-  { col: 'H', name: '인도네시아어', tinyld: 'id', google: 'id'   },
-  { col: 'I', name: '베트남어',    tinyld: 'vi', google: 'vi'    },
-  { col: 'J', name: '중국어(번체)', tinyld: 'zh', google: 'zh-TW' },
-  { col: 'K', name: '러시아어',    tinyld: 'ru', google: 'ru'    },
+  { col: 'B', name: '한국어',       google: 'ko'    },
+  { col: 'C', name: '영어',         google: 'en'    },
+  { col: 'D', name: '프랑스어',     google: 'fr'    },
+  { col: 'E', name: '일본어',       google: 'ja'    },
+  { col: 'F', name: '스페인어',     google: 'es'    },
+  { col: 'G', name: '독일어',       google: 'de'    },
+  { col: 'H', name: '인도네시아어', google: 'id'    },
+  { col: 'I', name: '베트남어',     google: 'vi'    },
+  { col: 'J', name: '중국어(번체)', google: 'zh-TW' },
+  { col: 'K', name: '러시아어',     google: 'ru'    },
 ] as const
 ```
 
-> **중국어(번체) 처리**: tinyld는 간체·번체를 구분하지 않고 `'zh'`를 반환함. 언어 오류 감지 시 J열에서 `'zh'`가 감지되면 정상으로 처리.
+> **tinyld 미사용**: LANG_MAP에서 tinyld ISO 639-1 코드 필드 제거. 언어 감지는 Gemini API가 langName(한국어명) 기준으로 처리.
 
-### 오류 감지 방어 로직 (오탐 방지)
-
-짧은 문자열에서의 언어 감지 오탐을 방지하기 위해 아래 **3중 필터**를 적용한다.
-
-```typescript
-const MIN_DETECT_LENGTH = 5  // 5자 미만은 감지 건너뜀 → 오류 미표시
-```
+### 클라이언트 오류 감지 로직 (detectIssues.ts)
 
 ```
 detectIssues(rows: StringRow[]):
   행 순회:
-    // ① 공용 외래어 먼저 판별 (언어 오류보다 우선)
+    // ① 공용 외래어 먼저 판별 (col 1~9, 한국어 제외)
     각 셀(col 1~9)에 대해:
-      sameCount = 한국어(col 0) 제외 9개 셀 중 cellValue와 동일한 값 개수
-      IF sameCount >= 6
-        → issue: warning/loanword  ← 이 셀은 언어 오류 검사 건너뜀
+      sameCount = 9개 비한국어 셀 중 cellValue와 동일한 값 개수
+      IF sameCount >= 4 (LOANWORD_THRESHOLD)
+        → issue: warning/loanword
 
-    셀 순회 (col 0~9):
-      IF 빈 문자열
-        → issue: error/empty
-      ELSE IF 이미 loanword 경고 셀
-        → 건너뜀 (공용 표현이므로 언어 오류 아님)
-      ELSE:
-        // ② 최소 길이 필터
-        IF cellValue.length < MIN_DETECT_LENGTH
-          → 건너뜀 (너무 짧아 신뢰할 수 없음)
+    // ② 빈 셀 검사 (col 0~9 전체)
+    IF cellValue가 비어있음 (공백·줄바꿈 제거 후)
+      → issue: error/empty
 
-        // ③ tinyld 감지
-        detected = tinyld.detect(cellValue)
-        IF detected === undefined OR detected === null
-          → 건너뜀 (감지 불가 = 오류 미표시)
-        ELSE IF detected !== LANG_MAP[col].tinyld
-          → issue: error/wrong-lang (detected)
+// ※ wrong-lang은 여기서 처리하지 않음 — Gemini lang-check API가 담당
 ```
-
-**방어 로직 효과:**
-- `"OK"`, `"Next"`, `"+"` 같은 극단적으로 짧은 UI 문자열 → 감지 생략
-- `"Tutorial"`, `"Beta"` 같은 공용 외래어 → loanword로 먼저 분류, 언어 오류 제외
-- tinyld가 감지 불가(`undefined`) 반환 → 오류로 처리하지 않음
 
 ---
 
 ## API 명세
 
-### POST `/api/string-check/translate`
+### POST `/api/string-check/lang-check`
 
-번역 대상 텍스트를 받아 Gemini API를 경유해 번역 결과를 반환한다.
+Gemini AI를 사용해 각 셀의 언어 오류를 검사한다.
 
 - **Permission**: 로그인 세션 필요 (Supabase 세션 검증)
 - **Request Body**:
 ```json
 {
-  "text": "설정 저장 완료",
-  "targets": ["en", "fr", "ja", "es", "de", "id", "vi", "zh-TW", "ru"]
+  "rows": [
+    {
+      "index": "STR_0001",
+      "cells": [
+        { "colIdx": 1, "text": "Hello", "lang": "en", "langName": "영어" },
+        { "colIdx": 2, "text": "안녕하세요", "lang": "fr", "langName": "프랑스어" }
+      ]
+    }
+  ]
 }
 ```
 - **Response (200)**:
 ```json
 {
-  "translations": {
-    "en": "Settings saved",
-    "fr": "Paramètres sauvegardés",
-    "ja": "設定を保存しました",
-    "es": "Configuración guardada",
-    "de": "Einstellungen gespeichert",
-    "id": "Pengaturan tersimpan",
-    "vi": "Đã lưu cài đặt",
-    "zh-TW": "設定已儲存",
-    "ru": "Настройки сохранены"
-  }
+  "issues": [
+    { "rowIndex": "STR_0001", "colIdx": 2, "detected": "한국어" }
+  ]
 }
 ```
 - **Response (400)**: `{ "error": "Invalid input" }`
-- **Response (413)**: `{ "error": "Text too long", "maxChars": 2000 }` (요청당 문자 수 초과)
-- **Response (502)**: `{ "error": "Translation API failed" }` (Gemini API 오류 시)
+- **Response (401)**: `{ "error": "Unauthorized" }`
+- **Response (502)**: `{ "error": "Language check API failed" }` (Gemini API 오류 시)
 
-> **Gemini API 호출 방식**: 단일 요청으로 9개 언어를 동시 번역. `responseMimeType: 'application/json'`으로 안정적인 JSON 파싱. `temperature: 0.1`로 일관된 번역 품질 유지. 게임 로컬라이제이션 시스템 프롬프트로 게임 용어·맥락·길이 축약 반영.
-
----
-
-## 번역 비용 제한 설계
-
-### 과금 방식 확인
-
-Gemini API는 **토큰 수**에 대해 과금된다. 무료 티어(Free Tier)와 유료 티어가 존재.
-
-| 모델 | 무료 티어 | 유료 과금 |
-|------|----------|----------|
-| gemini-2.5-pro 이상 | 분당/일당 요청 제한 | 입력 $1.25~$2.50 / 백만 토큰 |
-
-파일 업로드·파싱·표 렌더링·편집은 브라우저 내 처리이므로 **비용 없음**. 번역 버튼 클릭 시에만 토큰 소비.
-
-### 비용 제한 전략
-
-**1차 방어 — API Route 요청당 문자 수 제한**
-
-단일 번역 요청이 지나치게 크지 않도록 서버에서 사전 차단.
-
-```typescript
-// /api/string-check/translate/route.ts
-const MAX_CHARS_PER_REQUEST = 2000  // 한 셀 텍스트 최대 2,000자
-// (게임 UI 문자열 특성상 이 이상은 비정상 요청)
-
-if (text.length > MAX_CHARS_PER_REQUEST) {
-  return NextResponse.json(
-    { error: 'Text too long', maxChars: MAX_CHARS_PER_REQUEST },
-    { status: 413 }
-  )
-}
-```
-
-**2차 방어 — 전체 번역 전 사용자 확인 UI**
-
-`[전체 번역]` 버튼 클릭 시, 번역 API 호출 전에 예상 문자 수를 계산해 사용자에게 표시:
-
-```
-번역 대상: 34행 × 평균 15자
-[확인 후 번역 시작]  [취소]
-```
-
-> `[선택 번역]`은 사용자가 명시적으로 선택한 항목이므로 확인 다이얼로그 생략.
-
-**3차 방어 — Google AI Studio 사용량 모니터링**
-
-Google AI Studio 대시보드에서 일별 토큰 사용량 확인. 필요 시 API 키 재발급으로 초과 차단.
-
-### 비용 시뮬레이션
-
-| 시나리오 | 입력 토큰 (추정) | 비용 |
-|----------|----------------|------|
-| 100행 전체 번역 (평균 15자) | ~15,000 토큰 | 무료 티어 |
-| 500행 전체 번역 (중복 없음) | ~75,000 토큰 | 무료 티어 또는 $0.09 |
-| 팀원 5명 × 매일 전체 번역 × 20일 | ~7,500,000 토큰 | 약 $9.4 |
-
-→ 내부 재사용(findExistingTranslations)으로 실제 API 호출 횟수 절감. 선택 번역으로 불필요한 전체 번역 방지.
+> **Gemini 호출 방식**: 배치 단위(40행) 처리. `responseMimeType: 'application/json'`, `temperature: 0`으로 일관된 결과. 시스템 프롬프트에 오탐 방지 규칙 포함 (브랜드명·게임 용어·3자 이하 미감지 등).
 
 ---
 
@@ -577,14 +389,14 @@ Google AI Studio 대시보드에서 일별 토큰 사용량 확인. 필요 시 A
 
 | 리스크 | 발생 조건 | 대응 |
 |--------|----------|------|
-| **언어 감지 오탐** | 짧은 UI 문자열(5자 미만)이나 공용 외래어에서 오탐 | **3중 필터** 적용: ① 공용 외래어 우선 분류 후 언어 오류 제외 ② 5자 미만 건너뜀 ③ 감지 불가(`undefined`) 시 오류 미표시 |
-| **ESM 빌드 오류** | ~~franc-min ESM 충돌~~ | **tinyld로 교체하여 리스크 제거** — tinyld는 CJS+ESM 모두 지원 |
-| **번역 비용 초과** | 팀원 전원이 대규모 파일을 매일 반복 번역 | **3중 방어**: ① API Route 요청당 2,000자 제한 ② 전체 번역 전 예상 문자 수 사용자 확인 UI ③ 선택 번역으로 필요한 행만 처리 |
+| **AI 언어 감지 오탐** | 게임 용어·브랜드명을 언어 오류로 잘못 감지 | 시스템 프롬프트에 오탐 방지 규칙 명시 (게임 용어, 3자 이하, 의심스러우면 미감지). 오탐 시 사용자가 원본 파일 직접 확인 |
+| **Gemini API 503 과부하** | gemini-3-pro-preview 서버 과부하 | 자동 폴백: gemini-2.5-pro로 재시도 |
+| **Gemini API 전체 실패** | API 키 미설정 또는 네트워크 오류 | 빨간 배너로 에러 표시, 빈 셀·외래어 감지 결과는 그대로 유지 |
 | **xlsx 파일 구조 불일치** | 헤더가 4행 이외 위치이거나 컬럼 순서가 다른 파일 | 파싱 전 row[3] 존재·11컬럼 이상 여부 검증 + 명확한 오류 메시지 표시 |
-| **대용량 파일 성능** | 1000행 초과 xlsx 업로드 시 감지 지연 | PRD 기준(1000행 3초)만 보장. 초과 시 경고 메시지 표시 |
+| **대용량 파일 성능** | 1000행 초과 xlsx 업로드 시 감지 지연 | 40행 배치 처리로 UI 블로킹 없음. 단, 전체 완료까지 시간 소요 |
 
 **롤백 절차**: 독립 라우트(`/string-check`)와 새 API 라우트만 추가, 기존 코드와 완전 분리. 문제 발생 시 해당 파일 삭제로 즉시 롤백 가능. DB 변경 없음.
 
 **관찰 포인트**:
-- Vercel 함수 로그에서 `/api/string-check/translate` 413·502 오류율 모니터링
+- Vercel 함수 로그에서 `/api/string-check/lang-check` 401·502 오류율 모니터링
 - Google AI Studio 대시보드에서 `GEMINI_API_KEY` 토큰 사용량 확인
