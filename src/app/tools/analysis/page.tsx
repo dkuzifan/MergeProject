@@ -30,6 +30,7 @@ type DataLine = {
   segment?:     string;
   color:        string;
   values:       number[];
+  gemPrice:     number | null;
   aosPrice:     number | null;
 };
 
@@ -55,6 +56,21 @@ const METRICS: { id: MetricTab; label: string; icon: string }[] = [
   { id: "users",   label: "유저 수",   icon: "👥" },
   { id: "revenue", label: "매출",      icon: "💰" },
 ];
+
+// ─── 유틸 ────────────────────────────────────────────────────────────────────
+
+function mostFrequent<T>(values: (T | null)[]): T | null {
+  const counts = new Map<T, number>();
+  for (const v of values) {
+    if (v === null) continue;
+    counts.set(v, (counts.get(v) ?? 0) + 1);
+  }
+  if (counts.size === 0) return null;
+  let best: T | null = null;
+  let bestCount = 0;
+  counts.forEach((count, val) => { if (count > bestCount) { bestCount = count; best = val; } });
+  return best;
+}
 
 // ─── 날짜 유틸 ───────────────────────────────────────────────────────────────
 
@@ -157,7 +173,8 @@ function parseSalesFile(
       segment,
       color:    LINE_COLORS[lines.length % LINE_COLORS.length],
       values,
-      aosPrice: good?.aos_price ?? null,
+      gemPrice:  good?.gem_price  ?? null,
+      aosPrice:  good?.aos_price  ?? null,
     });
   }
 
@@ -371,6 +388,11 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
                     />
                     <div className={`transition-colors ${on ? "text-gray-700 dark:text-gray-200" : "text-gray-400 dark:text-gray-600"}`}>
                       <span className="text-xs font-medium">{line.label}</span>
+                      {line.gemPrice !== null && (
+                        <span className="text-[11px] text-gray-400 dark:text-gray-500 ml-1.5">
+                          {line.gemPrice.toLocaleString()}젬
+                        </span>
+                      )}
                       {line.aosPrice !== null && (
                         <span className="text-[11px] text-gray-400 dark:text-gray-500 ml-1.5">
                           {formatPrice(line.aosPrice)}
@@ -416,8 +438,26 @@ export default function AnalysisPage() {
       .then(({ data, error }) => {
         if (error) { console.error("selling_goods 로드 실패:", error); }
         if (data) {
+          // 중복 log_name_a를 그룹핑 후 각 필드의 최빈값으로 병합
+          const groups = new Map<string, SellingGood[]>();
+          data.forEach((row: SellingGood) => {
+            const arr = groups.get(row.log_name_a) ?? [];
+            arr.push(row);
+            groups.set(row.log_name_a, arr);
+          });
           const map = new Map<string, SellingGood>();
-          data.forEach((row: SellingGood) => { map.set(row.log_name_a, row); });
+          groups.forEach((rows, log_name_a) => {
+            map.set(log_name_a, {
+              log_name_a,
+              index_a:   mostFrequent(rows.map(r => r.index_a)),
+              index_dev: mostFrequent(rows.map(r => r.index_dev)),
+              aos_id_a:  mostFrequent(rows.map(r => r.aos_id_a)),
+              ios_id_a:  mostFrequent(rows.map(r => r.ios_id_a)),
+              gem_price: mostFrequent(rows.map(r => r.gem_price)),
+              aos_price: mostFrequent(rows.map(r => r.aos_price)),
+              ios_price: mostFrequent(rows.map(r => r.ios_price)),
+            });
+          });
           setGoodsMap(map);
         }
         setGoodsLoading(false);
