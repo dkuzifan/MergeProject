@@ -762,7 +762,7 @@ export default function SuikaPage() {
               {/* ── 과일 특성 탭 ── */}
               {activeTab === "fruits" && (
                 <div className="space-y-2">
-                  <div className="grid gap-1 text-[10px] text-gray-500 font-bold text-center mb-2"
+                  <div className="grid gap-1 text-[10px] text-gray-500 dark:text-gray-400 font-bold text-center mb-2"
                        style={{ gridTemplateColumns: "0.8fr 2fr 1.5fr 1.5fr 1.5fr 1.5fr 1.5fr" }}>
                     <div>단계</div>
                     <div>이름</div>
@@ -775,34 +775,34 @@ export default function SuikaPage() {
 
                   {tempFruits.filter(f => f.id <= maxLevel).map((fruit, index) => (
                     <div key={fruit.id}
-                         className="grid gap-1 items-center p-1 rounded border bg-white"
+                         className="grid gap-1 items-center p-1 rounded border bg-white dark:bg-gray-700 dark:border-gray-600"
                          style={{ gridTemplateColumns: "0.8fr 2fr 1.5fr 1.5fr 1.5fr 1.5fr 1.5fr" }}>
-                      <div className="text-center font-bold text-xs text-gray-600">{fruit.id}</div>
-                      <div className="text-center text-[9px] text-gray-700 truncate px-1">{fruit.name}</div>
+                      <div className="text-center font-bold text-xs text-gray-600 dark:text-gray-300">{fruit.id}</div>
+                      <div className="text-center text-[9px] font-bold text-gray-700 dark:text-gray-200 truncate px-1">{fruit.name}</div>
                       <div>
                         <input type="number" value={Math.round(fruit.radius)}
                           onChange={(e) => handleTempChange(index, "radius", Number(e.target.value))}
-                          className="w-full text-center text-[10px] border rounded p-1" />
+                          className="w-full text-center text-[10px] border rounded p-1 bg-white dark:bg-gray-600 dark:border-gray-500 dark:text-white" />
                       </div>
                       <div>
                         <input type="number" step="0.1" value={fruit.restitution}
                           onChange={(e) => handleTempChange(index, "restitution", Number(e.target.value))}
-                          className="w-full text-center text-[10px] border rounded p-1 bg-blue-50" />
+                          className="w-full text-center text-[10px] border rounded p-1 bg-blue-50 dark:bg-blue-900/40 dark:border-blue-700 dark:text-blue-200" />
                       </div>
                       <div>
                         <input type="number" step="0.01" value={fruit.friction}
                           onChange={(e) => handleTempChange(index, "friction", Number(e.target.value))}
-                          className="w-full text-center text-[10px] border rounded p-1 bg-green-50" />
+                          className="w-full text-center text-[10px] border rounded p-1 bg-green-50 dark:bg-green-900/40 dark:border-green-700 dark:text-green-200" />
                       </div>
                       <div>
                         <input type="number" step="0.001" value={fruit.density}
                           onChange={(e) => handleTempChange(index, "density", Number(e.target.value))}
-                          className="w-full text-center text-[10px] border rounded p-1 bg-orange-50" />
+                          className="w-full text-center text-[10px] border rounded p-1 bg-orange-50 dark:bg-orange-900/40 dark:border-orange-700 dark:text-orange-200" />
                       </div>
                       <div>
                         <input type="number" value={fruit.score}
                           onChange={(e) => handleTempChange(index, "score", Number(e.target.value))}
-                          className="w-full text-center text-[10px] border rounded p-1 bg-yellow-50" />
+                          className="w-full text-center text-[10px] border rounded p-1 bg-yellow-50 dark:bg-yellow-900/40 dark:border-yellow-700 dark:text-yellow-200" />
                       </div>
                     </div>
                   ))}
@@ -820,34 +820,34 @@ export default function SuikaPage() {
                       const isValid = Math.abs(totalProb - 100) < 0.1;
 
                       return (
-                        <div key={range.id} className="border rounded-lg overflow-hidden">
+                        <div key={range.id} className="border dark:border-gray-600 rounded-lg overflow-hidden">
                           {/* 구간 헤더 */}
-                          <div className="flex items-center justify-between bg-gray-50 px-3 py-2 border-b">
+                          <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-700 px-3 py-2 border-b dark:border-gray-600">
                             <div className="flex items-center gap-2 text-xs">
-                              <span className="font-bold text-gray-700">
+                              <span className="font-bold text-gray-700 dark:text-gray-200">
                                 {range.minScore}점 ~ {maxScore}점
                               </span>
                               <span className="text-gray-400">|</span>
-                              <label className="text-gray-500">최소 점수</label>
+                              <label className="text-gray-500 dark:text-gray-400">최소 점수</label>
                               <input
                                 type="number" min="0"
                                 value={range.minScore}
                                 onChange={(e) => updateRangeField(range.id, "minScore", Number(e.target.value))}
-                                className="w-16 border rounded p-0.5 text-center text-xs font-bold text-indigo-600"
+                                className="w-16 border rounded p-0.5 text-center text-xs font-bold text-indigo-600 dark:text-indigo-300 bg-white dark:bg-gray-600 dark:border-gray-500"
                               />
                               <span className="text-gray-400">|</span>
-                              <label className="text-gray-500">연속 최대</label>
+                              <label className="text-gray-500 dark:text-gray-400">연속 최대</label>
                               <input
                                 type="number" min="1" max="11"
                                 value={range.maxRepeatCount}
                                 onChange={(e) => updateRangeField(range.id, "maxRepeatCount", Number(e.target.value))}
-                                className="w-10 border rounded p-0.5 text-center text-xs font-bold text-orange-600"
+                                className="w-10 border rounded p-0.5 text-center text-xs font-bold text-orange-600 dark:text-orange-300 bg-white dark:bg-gray-600 dark:border-gray-500"
                               />
                             </div>
                             {tempScoreRanges.length > 1 && (
                               <button
                                 onClick={() => deleteScoreRange(range.id)}
-                                className="text-[10px] text-red-400 hover:text-red-600 font-bold px-1"
+                                className="text-[10px] text-red-400 hover:text-red-500 font-bold px-1"
                               >
                                 ✕ 구간 삭제
                               </button>
@@ -855,8 +855,8 @@ export default function SuikaPage() {
                           </div>
 
                           {/* 엔트리 목록 */}
-                          <div className="p-2 space-y-1">
-                            <div className="grid gap-1 text-[10px] text-gray-400 font-bold text-center mb-1"
+                          <div className="p-2 space-y-1 bg-white dark:bg-gray-800">
+                            <div className="grid gap-1 text-[10px] text-gray-400 dark:text-gray-500 font-bold text-center mb-1"
                                  style={{ gridTemplateColumns: "2fr 3fr 1fr" }}>
                               <div>과일 단계</div>
                               <div>확률 (%)</div>
@@ -871,7 +871,7 @@ export default function SuikaPage() {
                                   <select
                                     value={entry.fruitId}
                                     onChange={(e) => updateRangeEntry(range.id, ei, "fruitId", Number(e.target.value))}
-                                    className="border rounded p-1 text-xs text-center"
+                                    className="border rounded p-1 text-xs text-center bg-white dark:bg-gray-700 dark:border-gray-500 dark:text-gray-100"
                                   >
                                     {fruits.filter(f => f.id <= maxLevel).map(f => (
                                       <option key={f.id} value={f.id}>{f.id}단계 {f.name}</option>
@@ -882,9 +882,9 @@ export default function SuikaPage() {
                                       type="number" min="0" max="100" step="0.1"
                                       value={entry.probability}
                                       onChange={(e) => updateRangeEntry(range.id, ei, "probability", Number(e.target.value))}
-                                      className="w-full border rounded p-1 text-xs text-center font-bold text-indigo-600"
+                                      className="w-full border rounded p-1 text-xs text-center font-bold text-indigo-600 dark:text-indigo-300 bg-white dark:bg-gray-700 dark:border-gray-500"
                                     />
-                                    <span className="text-[10px] text-gray-400">%</span>
+                                    <span className="text-[10px] text-gray-400 dark:text-gray-500">%</span>
                                   </div>
                                   <button
                                     onClick={() => deleteRangeEntry(range.id, ei)}
@@ -899,21 +899,21 @@ export default function SuikaPage() {
                             })}
 
                             {/* 엔트리 푸터 */}
-                            <div className="flex items-center justify-between mt-2 pt-2 border-t">
+                            <div className="flex items-center justify-between mt-2 pt-2 border-t dark:border-gray-700">
                               <button
                                 onClick={() => addRangeEntry(range.id)}
                                 disabled={range.entries.length >= 11}
-                                className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold disabled:opacity-30"
+                                className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-bold disabled:opacity-30"
                               >
                                 + 단계 추가
                               </button>
                               <div className="flex items-center gap-2">
-                                <span className={`text-[10px] font-bold ${isValid ? "text-green-600" : "text-red-500"}`}>
+                                <span className={`text-[10px] font-bold ${isValid ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
                                   합계: {totalProb.toFixed(1)}%
                                 </span>
                                 <button
                                   onClick={() => normalizeRangeEntries(range.id)}
-                                  className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded hover:bg-indigo-200"
+                                  className="text-[9px] bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 rounded hover:bg-indigo-200 dark:hover:bg-indigo-900"
                                 >
                                   100% 맞춤
                                 </button>
@@ -926,7 +926,7 @@ export default function SuikaPage() {
 
                   <button
                     onClick={addScoreRange}
-                    className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-indigo-400 hover:text-indigo-600 font-bold transition-colors"
+                    className="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-500 dark:text-gray-400 hover:border-indigo-400 hover:text-indigo-600 dark:hover:border-indigo-500 dark:hover:text-indigo-400 font-bold transition-colors"
                   >
                     + 점수 구간 추가
                   </button>
