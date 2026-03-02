@@ -1,30 +1,45 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from "recharts";
 import * as XLSX from "xlsx";
+import { createClient } from "@/utils/supabase/client";
 
 // ─── 타입 ────────────────────────────────────────────────────────────────────
 
 type MetricTab = "sales" | "users" | "revenue";
 
+type SellingGood = {
+  log_name_a: string;
+  index_a:    string | null;
+  index_dev:  string | null;
+  aos_id_a:   string | null;
+  ios_id_a:   string | null;
+  gem_price:  number | null;
+  aos_price:  number | null;
+  ios_price:  number | null;
+};
+
 type DataLine = {
-  id: string;
-  label: string;
-  color: string;
-  values: number[];
+  id:           string;
+  eventLogName: string;       // xlsx A열 원본값
+  label:        string;       // index_dev 또는 eventLogName (fallback)
+  segment?:     string;
+  color:        string;
+  values:       number[];
+  aosPrice:     number | null;
 };
 
 type ParsedSalesData = {
-  startDate: Date;
-  endDate: Date;
+  startDate:  Date;
+  endDate:    Date;
   hasSegment: boolean;
   dateLabels: string[];
-  lines: DataLine[];
-  chartData: Record<string, string | number>[];
+  lines:      DataLine[];
+  chartData:  Record<string, string | number>[];
 };
 
 // ─── 상수 ────────────────────────────────────────────────────────────────────
@@ -44,10 +59,11 @@ const METRICS: { id: MetricTab; label: string; icon: string }[] = [
 // ─── 날짜 유틸 ───────────────────────────────────────────────────────────────
 
 function parseYMD(s: string): Date {
-  const y = parseInt(s.slice(0, 4), 10);
-  const m = parseInt(s.slice(4, 6), 10) - 1;
-  const d = parseInt(s.slice(6, 8), 10);
-  return new Date(y, m, d);
+  return new Date(
+    parseInt(s.slice(0, 4), 10),
+    parseInt(s.slice(4, 6), 10) - 1,
+    parseInt(s.slice(6, 8), 10),
+  );
 }
 
 function addDays(date: Date, n: number): Date {
@@ -70,17 +86,25 @@ function formatFullDate(date: Date): string {
   return `${yy}년 ${m}월 ${d}일`;
 }
 
+function formatPrice(price: number | null): string {
+  if (price === null) return "";
+  return `₩${price.toLocaleString("ko-KR")}`;
+}
+
 // ─── xlsx 파싱 ───────────────────────────────────────────────────────────────
 
 function getCell(sheet: XLSX.WorkSheet, row: number, col: number): XLSX.CellObject | undefined {
   return sheet[XLSX.utils.encode_cell({ r: row - 1, c: col - 1 })];
 }
 
-function parseSalesFile(buffer: ArrayBuffer): ParsedSalesData {
+function parseSalesFile(
+  buffer: ArrayBuffer,
+  goodsMap: Map<string, SellingGood>,
+): ParsedSalesData {
   const workbook = XLSX.read(buffer, { type: "array" });
   const sheet    = workbook.Sheets[workbook.SheetNames[0]];
 
-  // 1. 기간 (A4): "# YYYYMMDD-YYYYMMDD"
+  // 1. 기간 (A4)
   const periodRaw = String(getCell(sheet, 4, 1)?.v ?? "");
   const periodStr = periodRaw.replace(/#/g, "").trim();
   const dashIdx   = periodStr.indexOf("-");
@@ -90,19 +114,17 @@ function parseSalesFile(buffer: ArrayBuffer): ParsedSalesData {
   const sameYear  = startDate.getFullYear() === endDate.getFullYear();
 
   // 2. 세그먼트 여부 (B8)
-  const b8Value    = String(getCell(sheet, 8, 2)?.v ?? "");
-  const hasSegment = b8Value.trim() === "세그먼트";
+  const hasSegment = String(getCell(sheet, 8, 2)?.v ?? "").trim() === "세그먼트";
 
-  // 3. 날짜 행 시작 컬럼 (1-based): 세그먼트 있으면 C=3, 없으면 B=2
+  // 3. 데이터 시작 컬럼 (1-based): 세그먼트 있으면 C=3, 없으면 B=2
   const dataStartCol = hasSegment ? 3 : 2;
 
-  // 4. 날짜 목록 (7행, N일차 → 실제 날짜 문자열)
+  // 4. 날짜 목록 (7행, N일차 → 실제 날짜)
   const dateLabels: string[] = [];
   for (let col = dataStartCol; col <= dataStartCol + 500; col++) {
     const cell = getCell(sheet, 7, col);
-    if (cell === undefined || cell.v === undefined || cell.v === "") break;
-    const dayN = Number(cell.v);
-    dateLabels.push(formatDateLabel(addDays(startDate, dayN), sameYear));
+    if (!cell || cell.v === undefined || cell.v === "") break;
+    dateLabels.push(formatDateLabel(addDays(startDate, Number(cell.v)), sameYear));
   }
   const numDays = dateLabels.length;
 
@@ -117,18 +139,29 @@ function parseSalesFile(buffer: ArrayBuffer): ParsedSalesData {
       ? String(getCell(sheet, row, 2)?.v ?? "")
       : undefined;
 
+    // selling_goods 매핑
+    const good     = goodsMap.get(eventLogName);
+    const baseName = good?.index_dev ?? eventLogName;
+    const label    = segment ? `${baseName} - ${segment}` : baseName;
+
     const values: number[] = [];
     for (let i = 0; i < numDays; i++) {
       const valCell = getCell(sheet, row, dataStartCol + i);
       values.push(valCell ? Number(valCell.v) : 0);
     }
 
-    const id    = `line_${row}`;
-    const label = segment ? `${eventLogName} - ${segment}` : eventLogName;
-    lines.push({ id, label, color: LINE_COLORS[lines.length % LINE_COLORS.length], values });
+    lines.push({
+      id: `line_${row}`,
+      eventLogName,
+      label,
+      segment,
+      color:    LINE_COLORS[lines.length % LINE_COLORS.length],
+      values,
+      aosPrice: good?.aos_price ?? null,
+    });
   }
 
-  // 6. Recharts용 chartData
+  // 6. Recharts 차트 데이터
   const chartData = dateLabels.map((date, i) => {
     const point: Record<string, string | number> = { date };
     lines.forEach(line => { point[line.id] = line.values[i] ?? 0; });
@@ -170,29 +203,33 @@ function UploadArea({ onFile }: { onFile: (file: File) => void }) {
   );
 }
 
-// ─── 상품 판매 탭 ────────────────────────────────────────────────────────────
+// ─── 커스텀 툴팁 ─────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 text-xs">
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 text-xs max-w-xs">
       <p className="font-bold text-gray-700 dark:text-gray-200 mb-2">{label}</p>
       {payload.map((entry: { color: string; name: string; value: number }) => (
         <div key={entry.name} className="flex items-center gap-2 mb-1">
-          <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
-          <span className="text-gray-600 dark:text-gray-300 truncate max-w-[160px]">{entry.name}</span>
-          <span className="font-bold text-gray-900 dark:text-white ml-auto pl-2">{entry.value.toLocaleString()}</span>
+          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
+          <span className="text-gray-600 dark:text-gray-300 truncate">{entry.name}</span>
+          <span className="font-bold text-gray-900 dark:text-white ml-auto pl-3">
+            {entry.value.toLocaleString()}
+          </span>
         </div>
       ))}
     </div>
   );
 }
 
-function ProductSalesTab() {
-  const [data, setData]       = useState<ParsedSalesData | null>(null);
-  const [error, setError]     = useState<string | null>(null);
-  const [visible, setVisible] = useState<Set<string>>(new Set());
+// ─── 상품 판매 탭 ────────────────────────────────────────────────────────────
+
+function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
+  const [data, setData]         = useState<ParsedSalesData | null>(null);
+  const [error, setError]       = useState<string | null>(null);
+  const [visible, setVisible]   = useState<Set<string>>(new Set());
   const [fileName, setFileName] = useState("");
 
   const handleFile = useCallback(async (file: File) => {
@@ -200,21 +237,23 @@ function ProductSalesTab() {
     setFileName(file.name);
     try {
       const buffer = await file.arrayBuffer();
-      const parsed = parseSalesFile(buffer);
+      const parsed = parseSalesFile(buffer, goodsMap);
       setData(parsed);
       setVisible(new Set(parsed.lines.map(l => l.id)));
     } catch (e) {
       setError("파일 파싱 중 오류가 발생했습니다. 파일 형식을 확인해 주세요.");
       console.error(e);
     }
-  }, []);
+  }, [goodsMap]);
 
   const toggleLine = (id: string) =>
     setVisible(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
 
   const toggleAll = () => {
     if (!data) return;
-    setVisible(prev => prev.size === data.lines.length ? new Set() : new Set(data.lines.map(l => l.id)));
+    setVisible(prev =>
+      prev.size === data.lines.length ? new Set() : new Set(data.lines.map(l => l.id))
+    );
   };
 
   const xInterval = data ? Math.max(0, Math.ceil(data.dateLabels.length / 8) - 1) : 0;
@@ -225,6 +264,18 @@ function ProductSalesTab() {
         <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-1">상품 판매 분석</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400">상품별 일자별 판매량을 선 그래프로 표시합니다.</p>
       </div>
+
+      {/* 상품 데이터 로드 상태 */}
+      {goodsMap.size === 0 && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg px-4 py-3 text-xs text-amber-700 dark:text-amber-400">
+          ⚠️ Supabase에 selling_goods 데이터가 없습니다. 이벤트 로그명이 그대로 표시됩니다.
+        </div>
+      )}
+      {goodsMap.size > 0 && (
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg px-4 py-3 text-xs text-green-700 dark:text-green-400">
+          ✅ 상품 기준 데이터 {goodsMap.size}개 로드됨
+        </div>
+      )}
 
       <UploadArea onFile={handleFile} />
 
@@ -262,7 +313,7 @@ function ProductSalesTab() {
                   className="text-gray-500 dark:text-gray-400"
                   interval={xInterval}
                   tickLine={false}
-                  axisLine={{ stroke: "currentColor", className: "text-gray-200 dark:text-gray-700" }}
+                  axisLine={{ stroke: "currentColor" }}
                 />
                 <YAxis
                   tick={{ fontSize: 11, fill: "currentColor" }}
@@ -302,7 +353,7 @@ function ProductSalesTab() {
                 {visible.size === data.lines.length ? "전체 해제" : "전체 선택"}
               </button>
             </div>
-            <div className="flex flex-wrap gap-x-6 gap-y-2.5">
+            <div className="flex flex-wrap gap-x-6 gap-y-3">
               {data.lines.map(line => {
                 const on = visible.has(line.id);
                 return (
@@ -318,11 +369,14 @@ function ProductSalesTab() {
                       className="w-5 h-0.5 rounded-full transition-colors"
                       style={{ backgroundColor: on ? line.color : "#d1d5db" }}
                     />
-                    <span className={`text-xs font-medium transition-colors ${
-                      on ? "text-gray-700 dark:text-gray-200" : "text-gray-400 dark:text-gray-600"
-                    }`}>
-                      {line.label}
-                    </span>
+                    <div className={`transition-colors ${on ? "text-gray-700 dark:text-gray-200" : "text-gray-400 dark:text-gray-600"}`}>
+                      <span className="text-xs font-medium">{line.label}</span>
+                      {line.aosPrice !== null && (
+                        <span className="text-[11px] text-gray-400 dark:text-gray-500 ml-1.5">
+                          {formatPrice(line.aosPrice)}
+                        </span>
+                      )}
+                    </div>
                   </label>
                 );
               })}
@@ -349,7 +403,26 @@ function PlaceholderTab({ label }: { label: string }) {
 // ─── 메인 페이지 ─────────────────────────────────────────────────────────────
 
 export default function AnalysisPage() {
-  const [activeTab, setActiveTab] = useState<MetricTab>("sales");
+  const [activeTab, setActiveTab]   = useState<MetricTab>("sales");
+  const [goodsMap, setGoodsMap]     = useState<Map<string, SellingGood>>(new Map());
+  const [goodsLoading, setGoodsLoading] = useState(true);
+
+  // Supabase에서 selling_goods 한 번만 로드
+  useEffect(() => {
+    const supabase = createClient();
+    supabase
+      .from("selling_goods")
+      .select("log_name_a, index_a, index_dev, aos_id_a, ios_id_a, gem_price, aos_price, ios_price")
+      .then(({ data, error }) => {
+        if (error) { console.error("selling_goods 로드 실패:", error); }
+        if (data) {
+          const map = new Map<string, SellingGood>();
+          data.forEach((row: SellingGood) => { map.set(row.log_name_a, row); });
+          setGoodsMap(map);
+        }
+        setGoodsLoading(false);
+      });
+  }, []);
 
   return (
     <div className="flex h-[calc(100vh-65px)] bg-gray-50 dark:bg-gray-900">
@@ -377,9 +450,17 @@ export default function AnalysisPage() {
 
       {/* 콘텐츠 */}
       <main className="flex-1 overflow-y-auto p-8">
-        {activeTab === "sales"   && <ProductSalesTab />}
-        {activeTab === "users"   && <PlaceholderTab label="유저 수" />}
-        {activeTab === "revenue" && <PlaceholderTab label="매출" />}
+        {goodsLoading ? (
+          <div className="flex items-center justify-center h-40 text-sm text-gray-400 dark:text-gray-600">
+            기준 데이터 로드 중...
+          </div>
+        ) : (
+          <>
+            {activeTab === "sales"   && <ProductSalesTab goodsMap={goodsMap} />}
+            {activeTab === "users"   && <PlaceholderTab label="유저 수" />}
+            {activeTab === "revenue" && <PlaceholderTab label="매출" />}
+          </>
+        )}
       </main>
 
     </div>
