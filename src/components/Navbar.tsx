@@ -96,6 +96,9 @@ export default function Navbar() {
                   <Link href="/string-check" className="block px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-xl hover:bg-white/50 dark:hover:bg-gray-700/50 hover:text-blue-600 transition duration-200">
                     🔤 스트링 체크
                   </Link>
+                  <Link href="/tools/analysis" className="block px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-xl hover:bg-white/50 dark:hover:bg-gray-700/50 hover:text-blue-600 transition duration-200">
+                    📊 데이터 분석
+                  </Link>
                 </div>
               </div>
             </div>
