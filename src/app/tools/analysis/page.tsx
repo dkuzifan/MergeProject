@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer,
+  ResponsiveContainer, ReferenceLine,
 } from "recharts";
 import * as XLSX from "xlsx";
 import { createClient } from "@/utils/supabase/client";
@@ -117,6 +117,20 @@ function formatFullDate(date: Date): string {
   const m  = date.getMonth() + 1;
   const d  = date.getDate();
   return `${yy}년 ${m}월 ${d}일`;
+}
+
+// "YYYY-MM-DD" 문자열을 차트 레이블 형식으로 변환 (범위 내 없으면 null)
+function resolveRefLabel(
+  isoDate: string,
+  dateLabels: string[],
+  startDate: Date,
+  endDate: Date,
+): string | null {
+  if (!isoDate) return null;
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const refDate = new Date(y, m - 1, d);
+  const label = formatDateLabel(refDate, startDate.getFullYear() === endDate.getFullYear());
+  return dateLabels.includes(label) ? label : null;
 }
 
 function formatPrice(price: number | null): string {
@@ -344,14 +358,21 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
   const [error, setError]         = useState<string | null>(null);
   const [visible, setVisible]     = useState<Set<string>>(new Set());
   const [fileName, setFileName]   = useState("");
-  const [viewMode, setViewMode]   = useState<"count" | "revenue">("count");
-  const [topN, setTopN]           = useState<number | null>(null);
+  const [viewMode, setViewMode]     = useState<"count" | "revenue">("count");
+  const [topN, setTopN]             = useState<number | null>(null);
+  const [refDateInput, setRefDateInput] = useState("");
+
+  const refLabel = useMemo(() =>
+    data ? resolveRefLabel(refDateInput, data.dateLabels, data.startDate, data.endDate) : null,
+    [refDateInput, data]
+  );
 
   const handleFile = useCallback(async (file: File) => {
     setError(null);
     setFileName(file.name);
     setTopN(null);
     setViewMode("count");
+    setRefDateInput("");
     try {
       const buffer = await file.arrayBuffer();
       const parsed = parseSalesFile(buffer, goodsMap);
@@ -460,8 +481,8 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
 
           {/* 차트 */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-            {/* 뷰 모드 토글 */}
-            <div className="flex gap-2 mb-4">
+            {/* 뷰 모드 토글 + 구분선 날짜 */}
+            <div className="flex flex-wrap items-center gap-3 mb-4">
               {(["count", "revenue"] as const).map(mode => (
                 <button
                   key={mode}
@@ -475,6 +496,21 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
                   {mode === "count" ? "이벤트 카운트" : "발생 매출"}
                 </button>
               ))}
+              <div className="flex items-center gap-2 ml-auto">
+                <span className="text-xs text-gray-400 dark:text-gray-500">구분선</span>
+                <input
+                  type="date"
+                  value={refDateInput}
+                  onChange={(e) => setRefDateInput(e.target.value)}
+                  className="text-xs border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                />
+                {refDateInput && (
+                  <button onClick={() => setRefDateInput("")} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">✕</button>
+                )}
+                {refDateInput && !refLabel && (
+                  <span className="text-[11px] text-amber-500">범위 밖</span>
+                )}
+              </div>
             </div>
 
             <ResponsiveContainer width="100%" height={380}>
@@ -497,6 +533,9 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
                   tickFormatter={yTickFormatter}
                 />
                 <Tooltip content={<CustomTooltip viewMode={viewMode} />} />
+                {refLabel && (
+                  <ReferenceLine x={refLabel} stroke="#f97316" strokeDasharray="4 4" strokeWidth={1.5} />
+                )}
                 {data.lines
                   .filter(l => visible.has(l.id))
                   .map(line => (
@@ -586,15 +625,17 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
 // ─── 유저 시트 차트 ───────────────────────────────────────────────────────────
 
 function UserSheetChart({
-  sheet, visible, onToggle, onSet,
+  sheet, visible, onToggle, onSet, refDateInput,
 }: {
-  sheet:    UserSheetData;
-  visible:  Set<string>;
-  onToggle: (id: string) => void;
-  onSet:    (ids: Set<string>) => void;
+  sheet:        UserSheetData;
+  visible:      Set<string>;
+  onToggle:     (id: string) => void;
+  onSet:        (ids: Set<string>) => void;
+  refDateInput: string;
 }) {
   const xInterval = Math.max(0, Math.ceil(sheet.dateLabels.length / 8) - 1);
   const allOn = sheet.series.every(s => visible.has(s.id));
+  const refLabel = resolveRefLabel(refDateInput, sheet.dateLabels, sheet.startDate, sheet.endDate);
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 space-y-4">
@@ -625,6 +666,9 @@ function UserSheetChart({
             tickFormatter={(v: number) => v.toLocaleString()}
           />
           <Tooltip content={<CustomTooltip viewMode="count" />} />
+          {refLabel && (
+            <ReferenceLine x={refLabel} stroke="#f97316" strokeDasharray="4 4" strokeWidth={1.5} />
+          )}
           {sheet.series
             .filter(s => visible.has(s.id))
             .map(s => (
@@ -680,10 +724,12 @@ function UserCountTab() {
   const [visible, setVisible] = useState<Record<string, Set<string>>>({});
   const [error, setError]     = useState<string | null>(null);
   const [fileName, setFileName] = useState("");
+  const [refDateInput, setRefDateInput] = useState("");
 
   const handleFile = useCallback(async (file: File) => {
     setError(null);
     setFileName(file.name);
+    setRefDateInput("");
     try {
       const buffer = await file.arrayBuffer();
       const parsed = parseUserFile(buffer);
@@ -724,8 +770,20 @@ function UserCountTab() {
       )}
 
       {sheets.length > 0 && (
-        <div className="text-xs text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800 rounded-lg px-4 py-2.5 border border-gray-200 dark:border-gray-700">
-          📋 {fileName} · {sheets.length}개 시트 로드됨
+        <div className="flex flex-wrap items-center gap-3 text-xs text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800 rounded-lg px-4 py-2.5 border border-gray-200 dark:border-gray-700">
+          <span>📋 {fileName} · {sheets.length}개 시트 로드됨</span>
+          <div className="flex items-center gap-2 ml-auto">
+            <span>구분선</span>
+            <input
+              type="date"
+              value={refDateInput}
+              onChange={(e) => setRefDateInput(e.target.value)}
+              className="text-xs border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+            />
+            {refDateInput && (
+              <button onClick={() => setRefDateInput("")} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">✕</button>
+            )}
+          </div>
         </div>
       )}
 
@@ -736,6 +794,7 @@ function UserCountTab() {
           visible={visible[sheet.sheetKey] ?? new Set()}
           onToggle={(id) => handleToggle(sheet.sheetKey, id)}
           onSet={(ids) => handleSet(sheet.sheetKey, ids)}
+          refDateInput={refDateInput}
         />
       ))}
     </div>
