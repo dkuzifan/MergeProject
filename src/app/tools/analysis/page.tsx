@@ -43,6 +43,23 @@ type ParsedSalesData = {
   chartData:  Record<string, string | number>[];
 };
 
+type UserSeriesLine = {
+  id:     string;
+  label:  string;
+  values: number[];
+  color:  string;
+};
+
+type UserSheetData = {
+  sheetKey:    string;
+  displayName: string;
+  startDate:   Date;
+  endDate:     Date;
+  dateLabels:  string[];
+  series:      UserSeriesLine[];
+  chartData:   Record<string, string | number>[];
+};
+
 // ─── 상수 ────────────────────────────────────────────────────────────────────
 
 const LINE_COLORS = [
@@ -186,6 +203,81 @@ function parseSalesFile(
   });
 
   return { startDate, endDate, hasSegment, dateLabels, lines, chartData };
+}
+
+// ─── 유저 수 xlsx 파싱 ────────────────────────────────────────────────────────
+
+const USER_SHEET_CONFIGS: Record<string, { displayName: string; series: { col: number; label: string }[] }> = {
+  dau: {
+    displayName: "DAU / 신규 유저",
+    series: [
+      { col: 2, label: "DAU" },
+      { col: 3, label: "신규 유저" },
+    ],
+  },
+  d1d7d30: {
+    displayName: "D1 / D7 / D30",
+    series: [
+      { col: 2, label: "D30" },
+      { col: 3, label: "D7" },
+      { col: 4, label: "D1" },
+    ],
+  },
+  dwmau: {
+    displayName: "DAU / WAU / MAU 비율",
+    series: [
+      { col: 2, label: "DAU/MAU" },
+      { col: 3, label: "DAU/WAU" },
+      { col: 4, label: "WAU/MAU" },
+    ],
+  },
+};
+
+const USER_SHEET_ORDER = ["dau", "d1d7d30", "dwmau"];
+
+function parseUserFile(buffer: ArrayBuffer): UserSheetData[] {
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const results: UserSheetData[] = [];
+
+  for (const sheetName of workbook.SheetNames) {
+    const key    = sheetName.toLowerCase().trim();
+    const config = USER_SHEET_CONFIGS[key];
+    if (!config) continue;
+
+    const sheet = workbook.Sheets[sheetName];
+
+    // A1: 시작일, A2: 종료일 (yyyymmdd)
+    const startRaw  = String(getCell(sheet, 1, 1)?.v ?? "").replace(/\D/g, "");
+    const endRaw    = String(getCell(sheet, 2, 1)?.v ?? "").replace(/\D/g, "");
+    const startDate = parseYMD(startRaw);
+    const endDate   = parseYMD(endRaw);
+    const sameYear  = startDate.getFullYear() === endDate.getFullYear();
+    const numDays   = Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000) + 1;
+
+    const dateLabels = Array.from({ length: numDays }, (_, i) =>
+      formatDateLabel(addDays(startDate, i), sameYear)
+    );
+
+    const series: UserSeriesLine[] = config.series.map((s, idx) => {
+      const values: number[] = [];
+      for (let row = 4; row < 4 + numDays; row++) {
+        const cell = getCell(sheet, row, s.col);
+        values.push(cell ? Number(cell.v) : 0);
+      }
+      return { id: `${key}_${s.label}`, label: s.label, values, color: LINE_COLORS[idx % LINE_COLORS.length] };
+    });
+
+    const chartData = dateLabels.map((date, i) => {
+      const point: Record<string, string | number> = { date };
+      series.forEach(s => { point[s.id] = s.values[i] ?? 0; });
+      return point;
+    });
+
+    results.push({ sheetKey: key, displayName: config.displayName, startDate, endDate, dateLabels, series, chartData });
+  }
+
+  results.sort((a, b) => USER_SHEET_ORDER.indexOf(a.sheetKey) - USER_SHEET_ORDER.indexOf(b.sheetKey));
+  return results;
 }
 
 // ─── 업로드 영역 ─────────────────────────────────────────────────────────────
@@ -491,6 +583,165 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
   );
 }
 
+// ─── 유저 시트 차트 ───────────────────────────────────────────────────────────
+
+function UserSheetChart({
+  sheet, visible, onToggle, onSet,
+}: {
+  sheet:    UserSheetData;
+  visible:  Set<string>;
+  onToggle: (id: string) => void;
+  onSet:    (ids: Set<string>) => void;
+}) {
+  const xInterval = Math.max(0, Math.ceil(sheet.dateLabels.length / 8) - 1);
+  const allOn = sheet.series.every(s => visible.has(s.id));
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-gray-700 dark:text-gray-200">{sheet.displayName}</h3>
+        <span className="text-xs text-gray-400 dark:text-gray-500">
+          {formatFullDate(sheet.startDate)} ~ {formatFullDate(sheet.endDate)}
+        </span>
+      </div>
+
+      <ResponsiveContainer width="100%" height={280}>
+        <LineChart data={sheet.chartData} margin={{ top: 8, right: 20, left: 0, bottom: 8 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-gray-100 dark:text-gray-700" />
+          <XAxis
+            dataKey="date"
+            tick={{ fontSize: 11, fill: "currentColor" }}
+            className="text-gray-500 dark:text-gray-400"
+            interval={xInterval}
+            tickLine={false}
+            axisLine={{ stroke: "currentColor" }}
+          />
+          <YAxis
+            tick={{ fontSize: 11, fill: "currentColor" }}
+            className="text-gray-500 dark:text-gray-400"
+            tickLine={false}
+            axisLine={false}
+            width={56}
+            tickFormatter={(v: number) => v.toLocaleString()}
+          />
+          <Tooltip content={<CustomTooltip viewMode="count" />} />
+          {sheet.series
+            .filter(s => visible.has(s.id))
+            .map(s => (
+              <Line
+                key={s.id}
+                type="monotone"
+                dataKey={s.id}
+                stroke={s.color}
+                strokeWidth={2}
+                dot={false}
+                name={s.label}
+                activeDot={{ r: 4, strokeWidth: 0 }}
+              />
+            ))}
+        </LineChart>
+      </ResponsiveContainer>
+
+      {/* 범례 */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        {sheet.series.map(s => {
+          const on = visible.has(s.id);
+          return (
+            <label key={s.id} className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={on}
+                onChange={() => onToggle(s.id)}
+                className="w-3.5 h-3.5 rounded cursor-pointer"
+                style={{ accentColor: s.color }}
+              />
+              <div className="w-5 h-0.5 rounded-full transition-colors" style={{ backgroundColor: on ? s.color : "#d1d5db" }} />
+              <span className={`text-xs font-medium transition-colors ${on ? "text-gray-700 dark:text-gray-200" : "text-gray-400 dark:text-gray-600"}`}>
+                {s.label}
+              </span>
+            </label>
+          );
+        })}
+        <button
+          onClick={() => onSet(allOn ? new Set() : new Set(sheet.series.map(s => s.id)))}
+          className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-medium ml-auto"
+        >
+          {allOn ? "전체 해제" : "전체 선택"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── 유저 수 탭 ───────────────────────────────────────────────────────────────
+
+function UserCountTab() {
+  const [sheets, setSheets]   = useState<UserSheetData[]>([]);
+  const [visible, setVisible] = useState<Record<string, Set<string>>>({});
+  const [error, setError]     = useState<string | null>(null);
+  const [fileName, setFileName] = useState("");
+
+  const handleFile = useCallback(async (file: File) => {
+    setError(null);
+    setFileName(file.name);
+    try {
+      const buffer = await file.arrayBuffer();
+      const parsed = parseUserFile(buffer);
+      if (parsed.length === 0) throw new Error("인식된 시트가 없습니다.");
+      setSheets(parsed);
+      const vis: Record<string, Set<string>> = {};
+      parsed.forEach(s => { vis[s.sheetKey] = new Set(s.series.map(sr => sr.id)); });
+      setVisible(vis);
+    } catch (e) {
+      setError("파일 파싱 중 오류가 발생했습니다. 파일 형식을 확인해 주세요.");
+      console.error(e);
+    }
+  }, []);
+
+  const handleToggle = (sheetKey: string, seriesId: string) =>
+    setVisible(prev => {
+      const s = new Set(prev[sheetKey]);
+      s.has(seriesId) ? s.delete(seriesId) : s.add(seriesId);
+      return { ...prev, [sheetKey]: s };
+    });
+
+  const handleSet = (sheetKey: string, ids: Set<string>) =>
+    setVisible(prev => ({ ...prev, [sheetKey]: ids }));
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-1">유저 수 분석</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400">DAU, 신규 유저, 리텐션, WAU/MAU 비율을 시트별로 표시합니다.</p>
+      </div>
+
+      <UploadArea onFile={handleFile} />
+
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-4 text-sm text-red-600 dark:text-red-400">
+          ⚠️ {error}
+        </div>
+      )}
+
+      {sheets.length > 0 && (
+        <div className="text-xs text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800 rounded-lg px-4 py-2.5 border border-gray-200 dark:border-gray-700">
+          📋 {fileName} · {sheets.length}개 시트 로드됨
+        </div>
+      )}
+
+      {sheets.map(sheet => (
+        <UserSheetChart
+          key={sheet.sheetKey}
+          sheet={sheet}
+          visible={visible[sheet.sheetKey] ?? new Set()}
+          onToggle={(id) => handleToggle(sheet.sheetKey, id)}
+          onSet={(ids) => handleSet(sheet.sheetKey, ids)}
+        />
+      ))}
+    </div>
+  );
+}
+
 // ─── 준비 중 탭 ──────────────────────────────────────────────────────────────
 
 function PlaceholderTab({ label }: { label: string }) {
@@ -578,7 +829,7 @@ export default function AnalysisPage() {
         ) : (
           <>
             {activeTab === "sales"   && <ProductSalesTab goodsMap={goodsMap} />}
-            {activeTab === "users"   && <PlaceholderTab label="유저 수" />}
+            {activeTab === "users"   && <UserCountTab />}
             {activeTab === "revenue" && <PlaceholderTab label="매출" />}
           </>
         )}
