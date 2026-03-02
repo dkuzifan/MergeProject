@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
@@ -223,8 +223,10 @@ function UploadArea({ onFile }: { onFile: (file: File) => void }) {
 // ─── 커스텀 툴팁 ─────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload, label, viewMode }: any) {
   if (!active || !payload?.length) return null;
+  const fmt = (v: number) =>
+    viewMode === "revenue" ? `₩${v.toLocaleString("ko-KR")}` : v.toLocaleString();
   return (
     <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 text-xs max-w-xs">
       <p className="font-bold text-gray-700 dark:text-gray-200 mb-2">{label}</p>
@@ -233,7 +235,7 @@ function CustomTooltip({ active, payload, label }: any) {
           <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
           <span className="text-gray-600 dark:text-gray-300 truncate">{entry.name}</span>
           <span className="font-bold text-gray-900 dark:text-white ml-auto pl-3">
-            {entry.value.toLocaleString()}
+            {fmt(entry.value)}
           </span>
         </div>
       ))}
@@ -243,15 +245,21 @@ function CustomTooltip({ active, payload, label }: any) {
 
 // ─── 상품 판매 탭 ────────────────────────────────────────────────────────────
 
+const TOP_N_OPTIONS = [5, 10, 15, 20, 25, 30] as const;
+
 function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
-  const [data, setData]         = useState<ParsedSalesData | null>(null);
-  const [error, setError]       = useState<string | null>(null);
-  const [visible, setVisible]   = useState<Set<string>>(new Set());
-  const [fileName, setFileName] = useState("");
+  const [data, setData]           = useState<ParsedSalesData | null>(null);
+  const [error, setError]         = useState<string | null>(null);
+  const [visible, setVisible]     = useState<Set<string>>(new Set());
+  const [fileName, setFileName]   = useState("");
+  const [viewMode, setViewMode]   = useState<"count" | "revenue">("count");
+  const [topN, setTopN]           = useState<number | null>(null);
 
   const handleFile = useCallback(async (file: File) => {
     setError(null);
     setFileName(file.name);
+    setTopN(null);
+    setViewMode("count");
     try {
       const buffer = await file.arrayBuffer();
       const parsed = parseSalesFile(buffer, goodsMap);
@@ -263,17 +271,57 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
     }
   }, [goodsMap]);
 
-  const toggleLine = (id: string) =>
+  // 전체 합계 기준 내림차순 정렬
+  const sortedLines = useMemo(() => {
+    if (!data) return [];
+    return [...data.lines].sort(
+      (a, b) => b.values.reduce((s, v) => s + v, 0) - a.values.reduce((s, v) => s + v, 0)
+    );
+  }, [data]);
+
+  // 뷰 모드에 따라 차트 데이터 변환 (revenue = count × price)
+  const displayChartData = useMemo(() => {
+    if (!data) return [];
+    if (viewMode === "count") return data.chartData;
+    return data.chartData.map(point => {
+      const p: Record<string, string | number> = { date: point.date as string };
+      data.lines.forEach(line => {
+        const price = line.aosPrice ?? line.gemPrice ?? null;
+        const count = (point[line.id] as number) ?? 0;
+        p[line.id] = price !== null ? count * price : 0;
+      });
+      return p;
+    });
+  }, [data, viewMode]);
+
+  const toggleLine = (id: string) => {
+    setTopN(null);
     setVisible(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+  };
+
+  const handleTopN = (n: number) => {
+    if (!data) return;
+    setTopN(n);
+    setVisible(new Set(sortedLines.slice(0, n).map(l => l.id)));
+  };
 
   const toggleAll = () => {
     if (!data) return;
+    setTopN(null);
     setVisible(prev =>
       prev.size === data.lines.length ? new Set() : new Set(data.lines.map(l => l.id))
     );
   };
 
   const xInterval = data ? Math.max(0, Math.ceil(data.dateLabels.length / 8) - 1) : 0;
+
+  const yTickFormatter = viewMode === "revenue"
+    ? (v: number) => {
+        if (v >= 100_000_000) return `₩${(v / 100_000_000).toFixed(1)}억`;
+        if (v >= 10_000)      return `₩${(v / 10_000).toFixed(0)}만`;
+        return `₩${v.toLocaleString("ko-KR")}`;
+      }
+    : (v: number) => v.toLocaleString();
 
   return (
     <div className="space-y-6">
@@ -282,7 +330,6 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
         <p className="text-sm text-gray-500 dark:text-gray-400">상품별 일자별 판매량을 선 그래프로 표시합니다.</p>
       </div>
 
-      {/* 상품 데이터 로드 상태 */}
       {goodsMap.size === 0 && (
         <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg px-4 py-3 text-xs text-amber-700 dark:text-amber-400">
           ⚠️ Supabase에 selling_goods 데이터가 없습니다. 이벤트 로그명이 그대로 표시됩니다.
@@ -321,8 +368,25 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
 
           {/* 차트 */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+            {/* 뷰 모드 토글 */}
+            <div className="flex gap-2 mb-4">
+              {(["count", "revenue"] as const).map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    viewMode === mode
+                      ? "bg-indigo-600 text-white"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                  }`}
+                >
+                  {mode === "count" ? "이벤트 카운트" : "발생 매출"}
+                </button>
+              ))}
+            </div>
+
             <ResponsiveContainer width="100%" height={380}>
-              <LineChart data={data.chartData} margin={{ top: 10, right: 24, left: 0, bottom: 10 }}>
+              <LineChart data={displayChartData} margin={{ top: 10, right: 24, left: 0, bottom: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-gray-100 dark:text-gray-700" />
                 <XAxis
                   dataKey="date"
@@ -337,10 +401,10 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
                   className="text-gray-500 dark:text-gray-400"
                   tickLine={false}
                   axisLine={false}
-                  width={52}
-                  tickFormatter={(v: number) => v.toLocaleString()}
+                  width={viewMode === "revenue" ? 68 : 52}
+                  tickFormatter={yTickFormatter}
                 />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip content={<CustomTooltip viewMode={viewMode} />} />
                 {data.lines
                   .filter(l => visible.has(l.id))
                   .map(line => (
@@ -359,10 +423,25 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
             </ResponsiveContainer>
           </div>
 
-          {/* 범례 (체크박스) */}
+          {/* 범례 */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">항목</span>
+            {/* 상위 N개 + 전체 선택/해제 */}
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">상위</span>
+              {TOP_N_OPTIONS.map(n => (
+                <button
+                  key={n}
+                  onClick={() => handleTopN(n)}
+                  className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                    topN === n
+                      ? "bg-indigo-600 text-white"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"
+                  }`}
+                >
+                  {n}개
+                </button>
+              ))}
+              <div className="w-px h-4 bg-gray-200 dark:bg-gray-600 mx-1" />
               <button
                 onClick={toggleAll}
                 className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
@@ -370,31 +449,33 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
                 {visible.size === data.lines.length ? "전체 해제" : "전체 선택"}
               </button>
             </div>
-            <div className="flex flex-wrap gap-x-6 gap-y-3">
+
+            {/* 수직 목록 */}
+            <div className="flex flex-col gap-y-1 max-h-96 overflow-y-auto pr-1">
               {data.lines.map(line => {
                 const on = visible.has(line.id);
                 return (
-                  <label key={line.id} className="flex items-center gap-2 cursor-pointer">
+                  <label key={line.id} className="flex items-center gap-2 cursor-pointer py-1 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/40 px-1">
                     <input
                       type="checkbox"
                       checked={on}
                       onChange={() => toggleLine(line.id)}
-                      className="w-3.5 h-3.5 rounded cursor-pointer"
+                      className="w-3.5 h-3.5 rounded cursor-pointer flex-shrink-0"
                       style={{ accentColor: line.color }}
                     />
                     <div
-                      className="w-5 h-0.5 rounded-full transition-colors"
+                      className="w-5 h-0.5 rounded-full flex-shrink-0 transition-colors"
                       style={{ backgroundColor: on ? line.color : "#d1d5db" }}
                     />
-                    <div className={`transition-colors ${on ? "text-gray-700 dark:text-gray-200" : "text-gray-400 dark:text-gray-600"}`}>
-                      <span className="text-xs font-medium">{line.label}</span>
+                    <div className={`flex items-baseline gap-1.5 min-w-0 transition-colors ${on ? "text-gray-700 dark:text-gray-200" : "text-gray-400 dark:text-gray-600"}`}>
+                      <span className="text-xs font-medium truncate">{line.label}</span>
                       {line.gemPrice !== null && (
-                        <span className="text-[11px] text-gray-400 dark:text-gray-500 ml-1.5">
+                        <span className="text-[11px] text-gray-400 dark:text-gray-500 flex-shrink-0">
                           {line.gemPrice.toLocaleString()}젬
                         </span>
                       )}
                       {line.aosPrice !== null && (
-                        <span className="text-[11px] text-gray-400 dark:text-gray-500 ml-1.5">
+                        <span className="text-[11px] text-gray-400 dark:text-gray-500 flex-shrink-0">
                           {formatPrice(line.aosPrice)}
                         </span>
                       )}
