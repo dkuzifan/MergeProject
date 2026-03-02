@@ -43,6 +43,15 @@ type ParsedSalesData = {
   chartData:  Record<string, string | number>[];
 };
 
+type LineStats = {
+  totalCount:    number;
+  totalRevenue:  number | null;
+  beforeCount:   number | null;
+  afterCount:    number | null;
+  beforeRevenue: number | null;
+  afterRevenue:  number | null;
+};
+
 type UserSeriesLine = {
   id:     string;
   label:  string;
@@ -117,6 +126,18 @@ function formatFullDate(date: Date): string {
   const m  = date.getMonth() + 1;
   const d  = date.getDate();
   return `${yy}년 ${m}월 ${d}일`;
+}
+
+function pctChange(before: number, after: number): string {
+  if (before === 0) return after > 0 ? "+∞%" : "—";
+  const pct = ((after - before) / before) * 100;
+  return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
+}
+
+function formatRevenue(v: number): string {
+  if (v >= 100_000_000) return `₩${(v / 100_000_000).toFixed(1)}억`;
+  if (v >= 10_000)      return `₩${(v / 10_000).toFixed(0)}만`;
+  return `₩${v.toLocaleString("ko-KR")}`;
 }
 
 // "YYYY-MM-DD" 문자열을 차트 레이블 형식으로 변환 (범위 내 없으면 null)
@@ -367,6 +388,40 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
     [refDateInput, data]
   );
 
+  // 라인별 통계 (전체 / 구분선 기준 이전·이후)
+  const lineStats = useMemo((): Map<string, LineStats> => {
+    if (!data) return new Map();
+    const refIdx = refLabel ? data.dateLabels.indexOf(refLabel) : -1;
+    const map = new Map<string, LineStats>();
+    data.lines.forEach(line => {
+      const price = line.aosPrice ?? line.gemPrice ?? null;
+      const totalCount   = line.values.reduce((s, v) => s + v, 0);
+      const totalRevenue = price !== null ? totalCount * price : null;
+      let beforeCount: number | null = null, afterCount: number | null = null;
+      let beforeRevenue:  number | null = null, afterRevenue:  number | null = null;
+      if (refIdx >= 0) {
+        beforeCount   = line.values.slice(0, refIdx).reduce((s, v) => s + v, 0);
+        afterCount    = line.values.slice(refIdx).reduce((s, v) => s + v, 0);
+        beforeRevenue = price !== null ? beforeCount * price : null;
+        afterRevenue  = price !== null ? afterCount  * price : null;
+      }
+      map.set(line.id, { totalCount, totalRevenue, beforeCount, afterCount, beforeRevenue, afterRevenue });
+    });
+    return map;
+  }, [data, refLabel]);
+
+  // 매출 모드 전체 합계 (visible 항목만)
+  const totalVisibleRevenue = useMemo(() => {
+    if (!data || viewMode !== "revenue") return null;
+    return data.lines
+      .filter(l => visible.has(l.id))
+      .reduce((sum, line) => {
+        const price = line.aosPrice ?? line.gemPrice ?? null;
+        if (price === null) return sum;
+        return sum + line.values.reduce((s, v) => s + v, 0) * price;
+      }, 0);
+  }, [data, viewMode, visible]);
+
   const handleFile = useCallback(async (file: File) => {
     setError(null);
     setFileName(file.name);
@@ -481,7 +536,7 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
 
           {/* 차트 */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-            {/* 뷰 모드 토글 + 구분선 날짜 */}
+            {/* 뷰 모드 토글 + 전체 매출 + 구분선 날짜 */}
             <div className="flex flex-wrap items-center gap-3 mb-4">
               {(["count", "revenue"] as const).map(mode => (
                 <button
@@ -496,6 +551,11 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
                   {mode === "count" ? "이벤트 카운트" : "발생 매출"}
                 </button>
               ))}
+              {totalVisibleRevenue !== null && (
+                <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2.5 py-1 rounded-lg">
+                  전체 {formatRevenue(totalVisibleRevenue)}
+                </span>
+              )}
               <div className="flex items-center gap-2 ml-auto">
                 <span className="text-xs text-gray-400 dark:text-gray-500">구분선</span>
                 <input
@@ -598,18 +658,54 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
                       className="w-5 h-0.5 rounded-full flex-shrink-0 transition-colors"
                       style={{ backgroundColor: on ? line.color : "#d1d5db" }}
                     />
-                    <div className={`flex items-baseline gap-1.5 min-w-0 transition-colors ${on ? "text-gray-700 dark:text-gray-200" : "text-gray-400 dark:text-gray-600"}`}>
-                      <span className="text-xs font-medium truncate">{line.label}</span>
-                      {line.gemPrice !== null && (
-                        <span className="text-[11px] text-gray-400 dark:text-gray-500 flex-shrink-0">
-                          {line.gemPrice.toLocaleString()}젬
-                        </span>
-                      )}
-                      {line.aosPrice !== null && (
-                        <span className="text-[11px] text-gray-400 dark:text-gray-500 flex-shrink-0">
-                          {formatPrice(line.aosPrice)}
-                        </span>
-                      )}
+                    <div className={`min-w-0 transition-colors ${on ? "text-gray-700 dark:text-gray-200" : "text-gray-400 dark:text-gray-600"}`}>
+                      {/* 이름 + 가격 태그 */}
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-xs font-medium truncate">{line.label}</span>
+                        {line.gemPrice !== null && (
+                          <span className="text-[11px] text-gray-400 dark:text-gray-500 flex-shrink-0">
+                            {line.gemPrice.toLocaleString()}젬
+                          </span>
+                        )}
+                        {line.aosPrice !== null && (
+                          <span className="text-[11px] text-gray-400 dark:text-gray-500 flex-shrink-0">
+                            {formatPrice(line.aosPrice)}
+                          </span>
+                        )}
+                      </div>
+                      {/* 통계 */}
+                      {(() => {
+                        const st = lineStats.get(line.id);
+                        if (!st) return null;
+                        if (!refLabel) {
+                          // 구분선 없음: 전체 합계
+                          return (
+                            <div className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
+                              {st.totalCount.toLocaleString()}개
+                              {st.totalRevenue !== null && ` · ${formatRevenue(st.totalRevenue)}`}
+                            </div>
+                          );
+                        }
+                        // 구분선 있음: 이전 / 이후 / 변화율
+                        const bc = st.beforeCount!, ac = st.afterCount!;
+                        const br = st.beforeRevenue, ar = st.afterRevenue;
+                        const cntPct = pctChange(bc, ac);
+                        const cntColor = ac >= bc ? "text-green-500" : "text-red-500";
+                        return (
+                          <div className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 space-y-0.5">
+                            <div>
+                              판매: {bc.toLocaleString()} → {ac.toLocaleString()}개
+                              <span className={`ml-1 font-medium ${cntColor}`}>{cntPct}</span>
+                            </div>
+                            {br !== null && ar !== null && (
+                              <div>
+                                매출: {formatRevenue(br)} → {formatRevenue(ar)}
+                                <span className={`ml-1 font-medium ${cntColor}`}>{pctChange(br, ar)}</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </label>
                 );
