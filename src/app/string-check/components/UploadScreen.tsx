@@ -34,6 +34,8 @@ function parseSheet(ws: XLSX.WorkSheet): StringRow[] | null {
 export default function UploadScreen({ onUpload }: Props) {
   const [error, setError] = useState('')
   const [dragging, setDragging] = useState(false)
+  const [parsedData, setParsedData] = useState<{ sheets: SheetData[]; fileName: string } | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const inputRef = useRef<HTMLInputElement>(null)
 
   function processFile(file: File) {
@@ -65,7 +67,8 @@ export default function UploadScreen({ onUpload }: Props) {
           return
         }
 
-        onUpload(validSheets, file.name)
+        setParsedData({ sheets: validSheets, fileName: file.name })
+        setSelected(new Set(validSheets.map((s) => s.name)))
       } catch {
         setError('파일을 읽는 중 오류가 발생했습니다.')
       }
@@ -84,6 +87,65 @@ export default function UploadScreen({ onUpload }: Props) {
     const file = e.target.files?.[0]
     if (file) processFile(file)
     e.target.value = ''
+  }
+
+  function toggleSheet(name: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.has(name) ? next.delete(name) : next.add(name)
+      return next
+    })
+  }
+
+  function handleStart() {
+    if (!parsedData || selected.size === 0) return
+    const selectedSheets = parsedData.sheets.filter((s) => selected.has(s.name))
+    onUpload(selectedSheets, parsedData.fileName)
+  }
+
+  if (parsedData) {
+    return (
+      <div className="flex min-h-[calc(100vh-52px)] flex-col items-center justify-center p-8">
+        <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 p-8 shadow-sm">
+          <div className="mb-1 text-lg font-bold text-gray-800 dark:text-white">검사할 시트 선택</div>
+          <div className="mb-6 text-sm text-gray-500 dark:text-gray-400 truncate">{parsedData.fileName}</div>
+
+          <div className="flex flex-col gap-3 mb-8">
+            {parsedData.sheets.map((sheet) => (
+              <label
+                key={sheet.name}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.has(sheet.name)}
+                  onChange={() => toggleSheet(sheet.name)}
+                  className="w-4 h-4 accent-blue-600"
+                />
+                <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{sheet.name}</span>
+                <span className="ml-auto text-xs text-gray-400">{sheet.rows.length}행</span>
+              </label>
+            ))}
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => { setParsedData(null); setSelected(new Set()) }}
+              className="flex-1 px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+              다시 선택
+            </button>
+            <button
+              onClick={handleStart}
+              disabled={selected.size === 0}
+              className="flex-1 px-4 py-2.5 rounded-lg bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              검사 시작
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
