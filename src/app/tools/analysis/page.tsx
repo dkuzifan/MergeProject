@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine,
+  ResponsiveContainer, ReferenceLine, Legend,
 } from "recharts";
 import * as XLSX from "xlsx";
 import { createClient } from "@/utils/supabase/client";
@@ -447,6 +447,24 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
     );
   }, [data]);
 
+  // 그룹화: eventLogName 마지막 _숫자 제거 → 동일 base끼리 묶음
+  const groupedLines = useMemo(() => {
+    if (!data) return [];
+    const groups = new Map<string, { displayName: string; lines: DataLine[] }>();
+    for (const line of data.lines) {
+      const key = line.eventLogName.replace(/_\d+$/, "");
+      if (!groups.has(key)) {
+        const labelBase = line.label.includes(" - ")
+          ? line.label.split(" - ")[0]
+          : line.label;
+        const displayName = labelBase.replace(/_\d+$/, "");
+        groups.set(key, { displayName, lines: [] });
+      }
+      groups.get(key)!.lines.push(line);
+    }
+    return Array.from(groups.values());
+  }, [data]);
+
   // 뷰 모드에 따라 차트 데이터 변환 (revenue = count × price)
   const displayChartData = useMemo(() => {
     if (!data) return [];
@@ -465,6 +483,16 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
   const toggleLine = (id: string) => {
     setTopN(null);
     setVisible(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+  };
+
+  const toggleGroup = (ids: string[], allOn: boolean) => {
+    setTopN(null);
+    setVisible(prev => {
+      const s = new Set(prev);
+      if (allOn) ids.forEach(id => s.delete(id));
+      else ids.forEach(id => s.add(id));
+      return s;
+    });
   };
 
   const handleTopN = (n: number) => {
@@ -574,7 +602,7 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
             </div>
 
             <ResponsiveContainer width="100%" height={380}>
-              <LineChart data={displayChartData} margin={{ top: 10, right: 24, left: 0, bottom: 10 }}>
+              <LineChart data={displayChartData} margin={{ top: 10, right: 24, left: 0, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-gray-100 dark:text-gray-700" />
                 <XAxis
                   dataKey="date"
@@ -593,6 +621,15 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
                   tickFormatter={yTickFormatter}
                 />
                 <Tooltip content={<CustomTooltip viewMode={viewMode} />} />
+                <Legend
+                  verticalAlign="bottom"
+                  iconType="plainline"
+                  iconSize={16}
+                  wrapperStyle={{ fontSize: "11px", paddingTop: "12px" }}
+                  formatter={(value) => (
+                    <span style={{ color: "inherit" }}>{value}</span>
+                  )}
+                />
                 {refLabel && (
                   <ReferenceLine x={refLabel} stroke="#f97316" strokeDasharray="4 4" strokeWidth={1.5} />
                 )}
@@ -641,73 +678,91 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
               </button>
             </div>
 
-            {/* 수직 목록 */}
-            <div className="flex flex-col gap-y-1 max-h-96 overflow-y-auto pr-1">
-              {data.lines.map(line => {
-                const on = visible.has(line.id);
+            {/* 수직 목록 (그룹별) */}
+            <div className="flex flex-col max-h-96 overflow-y-auto pr-1">
+              {groupedLines.map(({ displayName, lines: groupLines }) => {
+                const groupIds = groupLines.map(l => l.id);
+                const allOn = groupIds.every(id => visible.has(id));
                 return (
-                  <label key={line.id} className="flex items-center gap-2 cursor-pointer py-1 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/40 px-1">
-                    <input
-                      type="checkbox"
-                      checked={on}
-                      onChange={() => toggleLine(line.id)}
-                      className="w-3.5 h-3.5 rounded cursor-pointer flex-shrink-0"
-                      style={{ accentColor: line.color }}
-                    />
-                    <div
-                      className="w-5 h-0.5 rounded-full flex-shrink-0 transition-colors"
-                      style={{ backgroundColor: on ? line.color : "#d1d5db" }}
-                    />
-                    <div className={`min-w-0 transition-colors ${on ? "text-gray-700 dark:text-gray-200" : "text-gray-400 dark:text-gray-600"}`}>
-                      {/* 이름 + 가격 태그 */}
-                      <div className="flex items-baseline gap-1.5">
-                        <span className="text-xs font-medium truncate">{line.label}</span>
-                        {line.gemPrice !== null && (
-                          <span className="text-[11px] text-gray-400 dark:text-gray-500 flex-shrink-0">
-                            {line.gemPrice.toLocaleString()}젬
-                          </span>
-                        )}
-                        {line.aosPrice !== null && (
-                          <span className="text-[11px] text-gray-400 dark:text-gray-500 flex-shrink-0">
-                            {formatPrice(line.aosPrice)}
-                          </span>
-                        )}
-                      </div>
-                      {/* 통계 */}
-                      {(() => {
-                        const st = lineStats.get(line.id);
-                        if (!st) return null;
-                        if (!refLabel) {
-                          // 구분선 없음: 전체 합계
-                          return (
-                            <div className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
-                              {st.totalCount.toLocaleString()}개
-                              {st.totalRevenue !== null && ` · ${formatRevenue(st.totalRevenue)}`}
-                            </div>
-                          );
-                        }
-                        // 구분선 있음: 이전 / 이후 / 변화율
-                        const bc = st.beforeCount!, ac = st.afterCount!;
-                        const br = st.beforeRevenue, ar = st.afterRevenue;
-                        const cntPct = pctChange(bc, ac);
-                        const cntColor = ac >= bc ? "text-green-500" : "text-red-500";
-                        return (
-                          <div className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 space-y-0.5">
-                            <div>
-                              판매: {bc.toLocaleString()} → {ac.toLocaleString()}개
-                              <span className={`ml-1 font-medium ${cntColor}`}>{cntPct}</span>
-                            </div>
-                            {br !== null && ar !== null && (
-                              <div>
-                                매출: {formatRevenue(br)} → {formatRevenue(ar)}
-                                <span className={`ml-1 font-medium ${cntColor}`}>{pctChange(br, ar)}</span>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
+                  <div key={displayName} className="mb-3">
+                    {/* 그룹 헤더 */}
+                    <div className="flex items-center gap-2 px-1 py-1 border-b border-gray-100 dark:border-gray-700 mb-1">
+                      <button
+                        onClick={() => toggleGroup(groupIds, allOn)}
+                        className="text-[10px] font-semibold text-indigo-500 dark:text-indigo-400 hover:underline flex-shrink-0"
+                      >
+                        {allOn ? "해제" : "선택"}
+                      </button>
+                      <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 truncate">{displayName}</span>
+                      {groupLines.length > 1 && (
+                        <span className="text-[10px] text-gray-400 dark:text-gray-500 flex-shrink-0">({groupLines.length})</span>
+                      )}
                     </div>
-                  </label>
+                    {/* 그룹 항목 */}
+                    {groupLines.map(line => {
+                      const on = visible.has(line.id);
+                      return (
+                        <label key={line.id} className="flex items-center gap-2 cursor-pointer py-1 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/40 px-1 pl-4">
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            onChange={() => toggleLine(line.id)}
+                            className="w-3.5 h-3.5 rounded cursor-pointer flex-shrink-0"
+                            style={{ accentColor: line.color }}
+                          />
+                          <div
+                            className="w-5 h-0.5 rounded-full flex-shrink-0 transition-colors"
+                            style={{ backgroundColor: on ? line.color : "#d1d5db" }}
+                          />
+                          <div className={`min-w-0 transition-colors ${on ? "text-gray-700 dark:text-gray-200" : "text-gray-400 dark:text-gray-600"}`}>
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="text-xs font-medium truncate">{line.label}</span>
+                              {line.gemPrice !== null && (
+                                <span className="text-[11px] text-gray-400 dark:text-gray-500 flex-shrink-0">
+                                  {line.gemPrice.toLocaleString()}젬
+                                </span>
+                              )}
+                              {line.aosPrice !== null && (
+                                <span className="text-[11px] text-gray-400 dark:text-gray-500 flex-shrink-0">
+                                  {formatPrice(line.aosPrice)}
+                                </span>
+                              )}
+                            </div>
+                            {(() => {
+                              const st = lineStats.get(line.id);
+                              if (!st) return null;
+                              if (!refLabel) {
+                                return (
+                                  <div className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
+                                    {st.totalCount.toLocaleString()}개
+                                    {st.totalRevenue !== null && ` · ${formatRevenue(st.totalRevenue)}`}
+                                  </div>
+                                );
+                              }
+                              const bc = st.beforeCount!, ac = st.afterCount!;
+                              const br = st.beforeRevenue, ar = st.afterRevenue;
+                              const cntPct = pctChange(bc, ac);
+                              const cntColor = ac >= bc ? "text-green-500" : "text-red-500";
+                              return (
+                                <div className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 space-y-0.5">
+                                  <div>
+                                    판매: {bc.toLocaleString()} → {ac.toLocaleString()}개
+                                    <span className={`ml-1 font-medium ${cntColor}`}>{cntPct}</span>
+                                  </div>
+                                  {br !== null && ar !== null && (
+                                    <div>
+                                      매출: {formatRevenue(br)} → {formatRevenue(ar)}
+                                      <span className={`ml-1 font-medium ${cntColor}`}>{pctChange(br, ar)}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
                 );
               })}
             </div>
