@@ -447,6 +447,19 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
     );
   }, [data]);
 
+  // Y축 최댓값 고정 (전체 라인 기준, 표시 여부 무관)
+  const yAxisMax = useMemo(() => {
+    if (!data || displayChartData.length === 0) return undefined;
+    let max = 0;
+    for (const point of displayChartData) {
+      for (const line of data.lines) {
+        const v = (point[line.id] as number) ?? 0;
+        if (v > max) max = v;
+      }
+    }
+    return max > 0 ? max : undefined;
+  }, [data, displayChartData]);
+
   // 그룹화: eventLogName 마지막 _숫자 제거 → 동일 base끼리 묶음
   const groupedLines = useMemo(() => {
     if (!data) return [];
@@ -619,6 +632,7 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
                   axisLine={false}
                   width={viewMode === "revenue" ? 68 : 52}
                   tickFormatter={yTickFormatter}
+                  domain={[0, yAxisMax ?? "auto"]}
                 />
                 <Tooltip content={<CustomTooltip viewMode={viewMode} />} />
                 <Legend
