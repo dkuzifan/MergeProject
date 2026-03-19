@@ -450,7 +450,7 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
   // 그룹화: eventLogName 마지막 _숫자 제거 → 동일 base끼리 묶음
   const groupedLines = useMemo(() => {
     if (!data) return [];
-    const groups = new Map<string, { displayName: string; lines: DataLine[] }>();
+    const groups = new Map<string, { key: string; displayName: string; lines: DataLine[] }>();
     for (const line of data.lines) {
       const key = line.eventLogName.replace(/_\d+$/, "");
       if (!groups.has(key)) {
@@ -458,7 +458,7 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
           ? line.label.split(" - ")[0]
           : line.label;
         const displayName = labelBase.replace(/_\d+$/, "");
-        groups.set(key, { displayName, lines: [] });
+        groups.set(key, { key, displayName, lines: [] });
       }
       groups.get(key)!.lines.push(line);
     }
@@ -680,11 +680,11 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
 
             {/* 수직 목록 (그룹별) */}
             <div className="flex flex-col max-h-96 overflow-y-auto pr-1">
-              {groupedLines.map(({ displayName, lines: groupLines }) => {
+              {groupedLines.map(({ key: groupKey, displayName, lines: groupLines }) => {
                 const groupIds = groupLines.map(l => l.id);
                 const allOn = groupIds.every(id => visible.has(id));
                 return (
-                  <div key={displayName} className="mb-3">
+                  <div key={groupKey} className="mb-3">
                     {/* 그룹 헤더 */}
                     <div className="flex items-center gap-2 px-1 py-1 border-b border-gray-100 dark:border-gray-700 mb-1">
                       <button
