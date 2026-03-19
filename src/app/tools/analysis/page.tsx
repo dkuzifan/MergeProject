@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine, Legend,
+  ResponsiveContainer, ReferenceLine,
 } from "recharts";
 import * as XLSX from "xlsx";
 import { createClient } from "@/utils/supabase/client";
@@ -673,15 +673,6 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
                   domain={yAxisFixed ? [0, yAxisMax ?? "auto"] : [0, "auto"]}
                 />
                 <Tooltip content={<CustomTooltip viewMode={viewMode} />} />
-                <Legend
-                  verticalAlign="bottom"
-                  iconType="plainline"
-                  iconSize={16}
-                  wrapperStyle={{ fontSize: "11px", paddingTop: "12px" }}
-                  formatter={(value) => (
-                    <span style={{ color: "inherit" }}>{value}</span>
-                  )}
-                />
                 {refLabel && (
                   <ReferenceLine x={refLabel} stroke="#f97316" strokeDasharray="4 4" strokeWidth={1.5} />
                 )}
@@ -701,6 +692,16 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
                   ))}
               </LineChart>
             </ResponsiveContainer>
+
+            {/* 차트 하단 범례 */}
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3 px-1">
+              {data.lines.filter(l => visible.has(l.id)).map(line => (
+                <div key={line.id} className="flex items-center gap-1.5">
+                  <div className="w-5 h-0.5 rounded-full flex-shrink-0" style={{ backgroundColor: line.color }} />
+                  <span className="text-[11px] text-gray-600 dark:text-gray-300">{line.label}</span>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* 범례 */}
