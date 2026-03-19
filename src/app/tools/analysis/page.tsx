@@ -432,6 +432,33 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
     try {
       const buffer = await file.arrayBuffer();
       const parsed = parseSalesFile(buffer, goodsMap);
+
+      // goodsMap에 있지만 xlsx에 없는 상품 → 0값 라인으로 추가
+      const existingNames = new Set(parsed.lines.map(l => l.eventLogName));
+      const zeroLines: DataLine[] = [];
+      goodsMap.forEach((good, logName) => {
+        if (existingNames.has(logName)) return;
+        zeroLines.push({
+          id:           `zero_${logName}`,
+          eventLogName: logName,
+          label:        good.index_dev ?? logName,
+          color:        LINE_COLORS[(parsed.lines.length + zeroLines.length) % LINE_COLORS.length],
+          values:       new Array(parsed.dateLabels.length).fill(0),
+          gemPrice:     good.gem_price  ?? null,
+          aosPrice:     good.aos_price  ?? null,
+        });
+      });
+
+      if (zeroLines.length > 0) {
+        const allLines = [...parsed.lines, ...zeroLines];
+        parsed.lines = allLines;
+        parsed.chartData = parsed.dateLabels.map((date, i) => {
+          const point: Record<string, string | number> = { date };
+          allLines.forEach(line => { point[line.id] = line.values[i] ?? 0; });
+          return point;
+        });
+      }
+
       setData(parsed);
       setVisible(new Set(parsed.lines.map(l => l.id)));
     } catch (e) {
