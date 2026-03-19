@@ -382,6 +382,7 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
   const [viewMode, setViewMode]     = useState<"count" | "revenue">("count");
   const [topN, setTopN]             = useState<number | null>(null);
   const [refDateInput, setRefDateInput] = useState("");
+  const [yAxisFixed, setYAxisFixed] = useState(true);
 
   const refLabel = useMemo(() =>
     data ? resolveRefLabel(refDateInput, data.dateLabels, data.startDate, data.endDate) : null,
@@ -598,6 +599,16 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
                 </span>
               )}
               <div className="flex items-center gap-2 ml-auto">
+                <button
+                  onClick={() => setYAxisFixed(prev => !prev)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    yAxisFixed
+                      ? "bg-indigo-600 text-white"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                  }`}
+                >
+                  Y축 고정
+                </button>
                 <span className="text-xs text-gray-400 dark:text-gray-500">구분선</span>
                 <input
                   type="date"
@@ -632,7 +643,7 @@ function ProductSalesTab({ goodsMap }: { goodsMap: Map<string, SellingGood> }) {
                   axisLine={false}
                   width={viewMode === "revenue" ? 68 : 52}
                   tickFormatter={yTickFormatter}
-                  domain={[0, yAxisMax ?? "auto"]}
+                  domain={yAxisFixed ? [0, yAxisMax ?? "auto"] : [0, "auto"]}
                 />
                 <Tooltip content={<CustomTooltip viewMode={viewMode} />} />
                 <Legend
