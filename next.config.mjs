@@ -4,6 +4,8 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // recharts 3.x ESM 순환 참조 이슈 해결
+  transpilePackages: ['recharts'],
 };
 
 export default nextConfig;
