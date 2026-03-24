@@ -148,12 +148,14 @@ export default function LeaderboardBotPage() {
   const [presets,     setPresets]     = useState<Preset[]>([]);
   const [presetName,  setPresetName]  = useState("");
 
-  // localStorage에서 프리셋 로드
+  // 초기 로드: localStorage 프리셋 + Supabase 타입/봇 데이터
   useEffect(() => {
     try {
       const saved = localStorage.getItem(PRESET_STORAGE_KEY);
       if (saved) setPresets(JSON.parse(saved));
     } catch { /* ignore */ }
+    loadFromSupabase();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function savePresets(next: Preset[]) {
@@ -837,7 +839,7 @@ export default function LeaderboardBotPage() {
                       <td className="px-3 py-2 font-medium">{bot.bot_name}</td>
                       <td className="px-3 py-2">
                         <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${TYPE_COLORS[bot.type_id] ?? "bg-gray-100 text-gray-600"}`}>
-                          {bot.type_name}
+                          {botTypes.find(t => t.id === bot.type_id)?.type_name ?? `타입 ${bot.type_id}`}
                         </span>
                       </td>
                       {(["merge_min","merge_max","merge_prob","quest_min","quest_max","quest_prob","time_min","time_max","time_prob","time_max_score","countdown_sec"] as const).map(field => (
