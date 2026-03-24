@@ -143,6 +143,7 @@ export default function LeaderboardBotPage() {
 
   const [savingBots,   setSavingBots]   = useState(false);
   const [saveMsg,      setSaveMsg]      = useState<{ ok: boolean; text: string } | null>(null);
+  const [debugLog,     setDebugLog]     = useState<string[]>([]);
 
   // 프리셋
   const [presets,     setPresets]     = useState<Preset[]>([]);
@@ -183,12 +184,24 @@ export default function LeaderboardBotPage() {
   // ── Supabase 로드 ──────────────────────────
   async function loadFromSupabase() {
     setLoadingSupabase(true);
+    setDebugLog([]);
     try {
       const supabase = createClient();
-      const [{ data: types }, { data: botRows }] = await Promise.all([
+      const log: string[] = [];
+
+      const [
+        { data: types,   error: typesErr },
+        { data: botRows, error: botsErr  },
+      ] = await Promise.all([
         supabase.from("leaderboard_bot_types").select("*"),
         supabase.from("leaderboard_bots").select("*"),
       ]);
+
+      log.push(`types: ${types ? types.length + "행" : "null"} / error: ${typesErr ? JSON.stringify(typesErr) : "없음"}`);
+      log.push(`botRows: ${botRows ? botRows.length + "행" : "null"} / error: ${botsErr ? JSON.stringify(botsErr) : "없음"}`);
+      if (types?.length) log.push(`types[0]: ${JSON.stringify(types[0])}`);
+      if (botRows?.length) log.push(`botRows[0]: ${JSON.stringify(botRows[0])}`);
+      setDebugLog(log);
 
       const num = (t: Record<string, unknown>, key: string, fallback: number) => {
         const v = t[key];
@@ -433,6 +446,15 @@ export default function LeaderboardBotPage() {
           </div>
         </div>
       </div>
+
+      {debugLog.length > 0 && (
+        <div className="max-w-screen-xl mx-auto px-6 pt-4">
+          <div className="bg-gray-900 text-green-400 rounded-xl p-4 text-xs font-mono space-y-1">
+            <p className="text-gray-500 mb-2">🔍 Supabase 진단 로그</p>
+            {debugLog.map((line, i) => <p key={i}>{line}</p>)}
+          </div>
+        </div>
+      )}
 
       <div className="max-w-screen-xl mx-auto p-6 space-y-6">
 
