@@ -46,12 +46,12 @@ type Preset = {
 // Mock Data (6 types × ~33명 = 200명 풀)
 // ─────────────────────────────────────────────
 const MOCK_BOT_TYPES = [
-  { id: 1, type_name: "공격형", merge_min: 5,  merge_max: 15, merge_prob: 0.7, quest_min: 10, quest_max: 30, quest_prob: 0.8, time_min: 1, time_max: 5,  time_prob: 0.3, time_max_score: 30,  countdown_sec: 1800 },
-  { id: 2, type_name: "균형형", merge_min: 3,  merge_max: 10, merge_prob: 0.5, quest_min: 5,  quest_max: 20, quest_prob: 0.5, time_min: 1, time_max: 8,  time_prob: 0.4, time_max_score: 50,  countdown_sec: 1800 },
-  { id: 3, type_name: "시간형", merge_min: 1,  merge_max: 5,  merge_prob: 0.2, quest_min: 2,  quest_max: 8,  quest_prob: 0.2, time_min: 3, time_max: 12, time_prob: 0.8, time_max_score: 100, countdown_sec: 900  },
-  { id: 4, type_name: "수동형", merge_min: 2,  merge_max: 8,  merge_prob: 0.3, quest_min: 3,  quest_max: 10, quest_prob: 0.3, time_min: 2, time_max: 10, time_prob: 0.6, time_max_score: 80,  countdown_sec: 1200 },
-  { id: 5, type_name: "잠수형", merge_min: 1,  merge_max: 3,  merge_prob: 0.1, quest_min: 1,  quest_max: 5,  quest_prob: 0.1, time_min: 1, time_max: 4,  time_prob: 0.2, time_max_score: 20,  countdown_sec: 3600 },
-  { id: 6, type_name: "전략형", merge_min: 4,  merge_max: 12, merge_prob: 0.6, quest_min: 8,  quest_max: 25, quest_prob: 0.7, time_min: 2, time_max: 8,  time_prob: 0.5, time_max_score: 60,  countdown_sec: 1500 },
+  { id: 1, type_name: "타입1", merge_min: 5,  merge_max: 15, merge_prob: 70, quest_min: 10, quest_max: 30, quest_prob: 80, time_min: 1, time_max: 5,  time_prob: 30, time_max_score: 30,  countdown_sec: 1800 },
+  { id: 2, type_name: "타입2", merge_min: 3,  merge_max: 10, merge_prob: 50, quest_min: 5,  quest_max: 20, quest_prob: 50, time_min: 1, time_max: 8,  time_prob: 40, time_max_score: 50,  countdown_sec: 1800 },
+  { id: 3, type_name: "타입3", merge_min: 1,  merge_max: 5,  merge_prob: 20, quest_min: 2,  quest_max: 8,  quest_prob: 20, time_min: 3, time_max: 12, time_prob: 80, time_max_score: 100, countdown_sec: 900  },
+  { id: 4, type_name: "타입4", merge_min: 2,  merge_max: 8,  merge_prob: 30, quest_min: 3,  quest_max: 10, quest_prob: 30, time_min: 2, time_max: 10, time_prob: 60, time_max_score: 80,  countdown_sec: 1200 },
+  { id: 5, type_name: "타입5", merge_min: 1,  merge_max: 3,  merge_prob: 10, quest_min: 1,  quest_max: 5,  quest_prob: 10, time_min: 1, time_max: 4,  time_prob: 20, time_max_score: 20,  countdown_sec: 3600 },
+  { id: 6, type_name: "타입6", merge_min: 4,  merge_max: 12, merge_prob: 60, quest_min: 8,  quest_max: 25, quest_prob: 70, time_min: 2, time_max: 8,  time_prob: 50, time_max_score: 60,  countdown_sec: 1500 },
 ];
 
 const POOL_COUNTS = [34, 34, 33, 33, 33, 33];
@@ -143,7 +143,6 @@ export default function LeaderboardBotPage() {
 
   const [savingBots,   setSavingBots]   = useState(false);
   const [saveMsg,      setSaveMsg]      = useState<{ ok: boolean; text: string } | null>(null);
-  const [debugLog,     setDebugLog]     = useState<string[]>([]);
 
   // 프리셋
   const [presets,     setPresets]     = useState<Preset[]>([]);
@@ -184,24 +183,12 @@ export default function LeaderboardBotPage() {
   // ── Supabase 로드 ──────────────────────────
   async function loadFromSupabase() {
     setLoadingSupabase(true);
-    setDebugLog([]);
     try {
       const supabase = createClient();
-      const log: string[] = [];
-
-      const [
-        { data: types,   error: typesErr },
-        { data: botRows, error: botsErr  },
-      ] = await Promise.all([
+      const [{ data: types }, { data: botRows }] = await Promise.all([
         supabase.from("leaderboard_bot_types").select("*"),
         supabase.from("leaderboard_bots").select("*"),
       ]);
-
-      log.push(`types: ${types ? types.length + "행" : "null"} / error: ${typesErr ? JSON.stringify(typesErr) : "없음"}`);
-      log.push(`botRows: ${botRows ? botRows.length + "행" : "null"} / error: ${botsErr ? JSON.stringify(botsErr) : "없음"}`);
-      if (types?.length) log.push(`types[0]: ${JSON.stringify(types[0])}`);
-      if (botRows?.length) log.push(`botRows[0]: ${JSON.stringify(botRows[0])}`);
-      setDebugLog(log);
 
       const num = (t: Record<string, unknown>, key: string, fallback: number) => {
         const v = t[key];
@@ -290,14 +277,14 @@ export default function LeaderboardBotPage() {
 
     for (let m = 0; m < mergeCount; m++) {
       selectedBots.forEach((bot, i) => {
-        if (Math.random() < bot.merge_prob)
+        if (Math.random() < bot.merge_prob / 100)
           mergeScores[i] += randInt(bot.merge_min, bot.merge_max);
       });
     }
 
     quests.forEach(() => {
       selectedBots.forEach((bot, i) => {
-        if (Math.random() < bot.quest_prob)
+        if (Math.random() < bot.quest_prob / 100)
           questScores[i] += randInt(bot.quest_min, bot.quest_max);
       });
     });
@@ -307,7 +294,7 @@ export default function LeaderboardBotPage() {
       let accumulated = 0;
       for (let t = 0; t < cycles; t++) {
         if (accumulated >= bot.time_max_score) break;
-        if (Math.random() < bot.time_prob) {
+        if (Math.random() < bot.time_prob / 100) {
           const canGain = bot.time_max_score - accumulated;
           accumulated += Math.min(randInt(bot.time_min, bot.time_max), canGain);
         }
@@ -446,15 +433,6 @@ export default function LeaderboardBotPage() {
           </div>
         </div>
       </div>
-
-      {debugLog.length > 0 && (
-        <div className="max-w-screen-xl mx-auto px-6 pt-4">
-          <div className="bg-gray-900 text-green-400 rounded-xl p-4 text-xs font-mono space-y-1">
-            <p className="text-gray-500 mb-2">🔍 Supabase 진단 로그</p>
-            {debugLog.map((line, i) => <p key={i}>{line}</p>)}
-          </div>
-        </div>
-      )}
 
       <div className="max-w-screen-xl mx-auto p-6 space-y-6">
 
@@ -891,9 +869,9 @@ export default function LeaderboardBotPage() {
                         <td key={field} className="px-2 py-2">
                           <input
                             type="number"
-                            step={field.endsWith("_prob") ? 0.01 : 1}
+                            step={1}
                             min={0}
-                            max={field.endsWith("_prob") ? 1 : undefined}
+                            max={field.endsWith("_prob") ? 100 : undefined}
                             value={bot[field] as number}
                             onChange={e => updateBotField(bot.id, field, Number(e.target.value))}
                             className="w-16 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
