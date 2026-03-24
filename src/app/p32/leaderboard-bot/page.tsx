@@ -24,7 +24,8 @@ type BotConfig = {
   countdown_sec: number;
 };
 
-type QuestEntry = { id: number; score: number };
+type QuestPreset = { id: number; name: string; score: number };
+
 
 type SimEntry = {
   id: number;
@@ -81,7 +82,8 @@ function buildMockPool(): BotConfig[] {
 const DEFAULT_COMPOSITION: Record<number, number> = { 1: 5, 2: 5, 3: 5, 4: 5, 5: 5, 6: 4 };
 const INITIAL_POOL = buildMockPool();
 const SESSION_MAX_MIN = 24 * 60; // 1440분
-const PRESET_STORAGE_KEY = "leaderboard_bot_presets";
+const PRESET_STORAGE_KEY       = "leaderboard_bot_presets";
+const QUEST_PRESET_STORAGE_KEY = "leaderboard_quest_presets";
 
 function pickFromPool(pool: BotConfig[], composition: Record<number, number>): BotConfig[] {
   const picked: BotConfig[] = [];
@@ -133,9 +135,18 @@ export default function LeaderboardBotPage() {
   // 유저 입력
   const [userInitScore,   setUserInitScore]   = useState(0);
   const [mergeCount,      setMergeCount]      = useState(0);
-  const [quests,          setQuests]          = useState<QuestEntry[]>([{ id: 1, score: 50 }]);
   const [activeMinutes,   setActiveMinutes]   = useState(0);
   const [inactiveMinutes, setInactiveMinutes] = useState(0);
+
+  // 퀘스트 프리셋 (localStorage 저장)
+  const [questPresets,    setQuestPresets]    = useState<QuestPreset[]>([
+    { id: 1, name: "50점 퀘스트",  score: 50  },
+    { id: 2, name: "100점 퀘스트", score: 100 },
+    { id: 3, name: "120점 퀘스트", score: 120 },
+  ]);
+  const [questClears,     setQuestClears]     = useState<Record<number, number>>({});
+  const [newQuestName,    setNewQuestName]    = useState("");
+  const [newQuestScore,   setNewQuestScore]   = useState(50);
 
   const [results,      setResults]      = useState<SimEntry[] | null>(null);
   const [prevResults,  setPrevResults]  = useState<SimEntry[] | null>(null);
@@ -153,6 +164,10 @@ export default function LeaderboardBotPage() {
     try {
       const saved = localStorage.getItem(PRESET_STORAGE_KEY);
       if (saved) setPresets(JSON.parse(saved));
+    } catch { /* ignore */ }
+    try {
+      const savedQ = localStorage.getItem(QUEST_PRESET_STORAGE_KEY);
+      if (savedQ) setQuestPresets(JSON.parse(savedQ));
     } catch { /* ignore */ }
     loadFromSupabase();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -282,11 +297,14 @@ export default function LeaderboardBotPage() {
       });
     }
 
-    quests.forEach(() => {
-      selectedBots.forEach((bot, i) => {
-        if (Math.random() < bot.quest_prob / 100)
-          questScores[i] += randInt(bot.quest_min, bot.quest_max);
-      });
+    questPresets.forEach(preset => {
+      const count = questClears[preset.id] ?? 0;
+      for (let c = 0; c < count; c++) {
+        selectedBots.forEach((bot, i) => {
+          if (Math.random() < bot.quest_prob / 100)
+            questScores[i] += randInt(bot.quest_min, bot.quest_max);
+        });
+      }
     });
 
     selectedBots.forEach((bot, i) => {
@@ -302,9 +320,9 @@ export default function LeaderboardBotPage() {
       timeScores[i] = accumulated;
     });
 
-    const userMerge = mergeCount;
-    const userQuest = quests.reduce((s, q) => s + q.score, 0);
-    const userTotal = userInitScore + userMerge + userQuest;
+    const userMerge  = mergeCount;
+    const userQuest  = questPresets.reduce((s, p) => s + p.score * (questClears[p.id] ?? 0), 0);
+    const userTotal  = userInitScore + userMerge + userQuest;
     const userGained = userMerge + userQuest;
 
     const entries: SimEntry[] = [
@@ -326,11 +344,27 @@ export default function LeaderboardBotPage() {
     setResults(entries);
   }
 
-  // ── 퀘스트 관리 ───────────────────────────
-  function addQuest()    { setQuests(prev => [...prev, { id: Date.now(), score: 50 }]); }
-  function removeQuest(id: number) { setQuests(prev => prev.filter(q => q.id !== id)); }
-  function updateQuestScore(id: number, score: number) {
-    setQuests(prev => prev.map(q => q.id === id ? { ...q, score } : q));
+  // ── 퀘스트 프리셋 관리 ────────────────────
+  function saveQuestPresets(next: QuestPreset[]) {
+    setQuestPresets(next);
+    localStorage.setItem(QUEST_PRESET_STORAGE_KEY, JSON.stringify(next));
+  }
+  function addQuestPreset() {
+    const name = newQuestName.trim() || `${newQuestScore}점 퀘스트`;
+    const next = [...questPresets, { id: Date.now(), name, score: newQuestScore }];
+    saveQuestPresets(next);
+    setNewQuestName("");
+    setNewQuestScore(50);
+  }
+  function removeQuestPreset(id: number) {
+    saveQuestPresets(questPresets.filter(q => q.id !== id));
+    setQuestClears(prev => { const n = { ...prev }; delete n[id]; return n; });
+  }
+  function setQuestClearCount(id: number, delta: number) {
+    setQuestClears(prev => ({ ...prev, [id]: Math.max(0, (prev[id] ?? 0) + delta) }));
+  }
+  function resetQuestClears() {
+    setQuestClears({});
   }
 
   function updateBotField(botId: number, field: keyof BotConfig, value: number | string) {
@@ -394,7 +428,8 @@ export default function LeaderboardBotPage() {
   const sessionWarning   = !sessionOver && totalMinutes >= SESSION_MAX_MIN * (20 / 24);
 
   const userRank   = results ? results.findIndex(r => r.isUser) + 1 : null;
-  const questTotal = quests.reduce((s, q) => s + q.score, 0);
+  const questTotal = questPresets.reduce((s, p) => s + p.score * (questClears[p.id] ?? 0), 0);
+  const questClearTotal = Object.values(questClears).reduce((s, v) => s + v, 0);
 
   const sessionBarColor = sessionOver
     ? "bg-red-500"
@@ -590,36 +625,75 @@ export default function LeaderboardBotPage() {
                 <span className="text-xs text-orange-500 dark:text-orange-400 w-20 text-right shrink-0">→ +{mergeCount}점</span>
               </div>
 
+              {/* 퀘스트 프리셋 */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-500">퀘스트 클리어</span>
                   <button
-                    onClick={addQuest}
-                    className="text-xs px-2.5 py-1 rounded-md bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                    onClick={resetQuestClears}
+                    className="text-xs px-2.5 py-1 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                   >
-                    + 퀘스트 추가
+                    초기화
                   </button>
                 </div>
-                <div className="space-y-2">
-                  {quests.map((quest, idx) => (
-                    <div key={quest.id} className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400 w-16 shrink-0">퀘스트 {idx + 1}</span>
-                      <input
-                        type="number" min={0}
-                        value={quest.score}
-                        onChange={e => updateQuestScore(quest.id, Number(e.target.value))}
-                        className="w-28 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <span className="text-xs text-gray-400">점</span>
-                      <button
-                        onClick={() => removeQuest(quest.id)}
-                        className="ml-auto text-xs text-red-400 hover:text-red-600 px-1.5 py-1 rounded transition-colors"
-                      >✕</button>
-                    </div>
-                  ))}
-                  {quests.length > 0 && (
-                    <p className="text-xs text-green-500 dark:text-green-400">퀘스트 합계: +{questTotal}점</p>
+
+                {/* 프리셋 목록 */}
+                <div className="space-y-2 mb-3">
+                  {questPresets.map(preset => {
+                    const count = questClears[preset.id] ?? 0;
+                    return (
+                      <div key={preset.id} className="flex items-center gap-2">
+                        <span className="text-xs text-gray-600 dark:text-gray-300 flex-1 min-w-0 truncate">
+                          {preset.name} <span className="text-gray-400">({preset.score}점)</span>
+                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => setQuestClearCount(preset.id, -1)}
+                            className="w-6 h-6 flex items-center justify-center rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 text-sm font-bold transition-colors"
+                          >-</button>
+                          <span className="w-6 text-center text-sm font-semibold tabular-nums">{count}</span>
+                          <button
+                            onClick={() => setQuestClearCount(preset.id, +1)}
+                            className="w-6 h-6 flex items-center justify-center rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 text-sm font-bold transition-colors"
+                          >+</button>
+                        </div>
+                        <span className="text-xs text-orange-500 dark:text-orange-400 w-16 text-right shrink-0">
+                          +{(preset.score * count).toLocaleString()}점
+                        </span>
+                        <button
+                          onClick={() => removeQuestPreset(preset.id)}
+                          className="text-gray-300 dark:text-gray-600 hover:text-red-500 text-xs px-1 transition-colors"
+                        >✕</button>
+                      </div>
+                    );
+                  })}
+                  {questClearTotal > 0 && (
+                    <p className="text-xs text-green-500 dark:text-green-400 pt-1">
+                      퀘스트 합계: +{questTotal.toLocaleString()}점 ({questClearTotal}회 클리어)
+                    </p>
                   )}
+                </div>
+
+                {/* 새 프리셋 추가 */}
+                <div className="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+                  <input
+                    type="text"
+                    placeholder="이름 (선택)"
+                    value={newQuestName}
+                    onChange={e => setNewQuestName(e.target.value)}
+                    className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <input
+                    type="number" min={1}
+                    value={newQuestScore}
+                    onChange={e => setNewQuestScore(Number(e.target.value))}
+                    className="w-20 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-xs text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-xs text-gray-400 shrink-0">점</span>
+                  <button
+                    onClick={addQuestPreset}
+                    className="text-xs px-2.5 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors shrink-0"
+                  >+ 추가</button>
                 </div>
               </div>
             </div>
