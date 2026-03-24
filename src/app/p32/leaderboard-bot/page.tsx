@@ -190,44 +190,55 @@ export default function LeaderboardBotPage() {
         supabase.from("leaderboard_bots").select("*"),
       ]);
 
-      if (types?.length && botRows?.length) {
-        const loadedIds = new Set(types.map((t: Record<string, unknown>) => t.id as number));
+      const num = (t: Record<string, unknown>, key: string, fallback: number) => {
+        const v = t[key];
+        return typeof v === "number" ? v : Number(v) || fallback;
+      };
+
+      // ── 타입 로드 (봇 데이터와 무관하게 항상 처리) ──
+      if (types?.length) {
+        const loadedIds = new Set(types.map((t: Record<string, unknown>) => Number(t.id)));
         const mergedTypes = [
           ...types.map((t: Record<string, unknown>) => ({
             id: t.id as number,
             type_name: t.type_name as string,
           })),
-          // Supabase에 없는 타입은 목 데이터 이름으로 임시 추가
           ...MOCK_BOT_TYPES
             .filter(t => !loadedIds.has(t.id))
             .map(t => ({ id: t.id, type_name: `${t.type_name} (임시)` })),
         ].sort((a, b) => a.id - b.id);
         setBotTypes(mergedTypes);
+        setSupabaseLoaded(true);
+      }
+
+      // ── 봇 풀 로드 (봇 데이터가 있을 때만) ──
+      if (types?.length && botRows?.length) {
+        const typeMap = new Map<number, Record<string, unknown>>();
+        types.forEach((t: Record<string, unknown>) => typeMap.set(Number(t.id), t));
 
         const pool: BotConfig[] = botRows.map((b: Record<string, unknown>) => {
-          const t = (types.find((t: Record<string, unknown>) => t.id === b.bot_type_id) ?? {}) as Record<string, unknown>;
+          const t = typeMap.get(Number(b.bot_type_id)) ?? {};
           return {
-            id:        b.id as number,
-            bot_name:  b.bot_name as string,
-            type_id:   b.bot_type_id as number,
-            type_name: t.type_name as string ?? "Unknown",
-            merge_min:  t.merge_min  as number ?? 1,
-            merge_max:  t.merge_max  as number ?? 10,
-            merge_prob: t.merge_prob as number ?? 0.5,
-            quest_min:  t.quest_min  as number ?? 1,
-            quest_max:  t.quest_max  as number ?? 10,
-            quest_prob: t.quest_prob as number ?? 0.5,
-            time_min:   t.time_min   as number ?? 1,
-            time_max:   t.time_max   as number ?? 10,
-            time_prob:  t.time_prob  as number ?? 0.5,
-            time_max_score: t.time_max_score as number ?? 50,
-            countdown_sec:  t.countdown_sec  as number ?? 1800,
+            id:       Number(b.id),
+            bot_name: String(b.bot_name ?? ""),
+            type_id:  Number(b.bot_type_id),
+            type_name: String(t.type_name ?? "Unknown"),
+            merge_min:  num(t, "merge_min",  1),
+            merge_max:  num(t, "merge_max",  10),
+            merge_prob: num(t, "merge_prob", 0.5),
+            quest_min:  num(t, "quest_min",  1),
+            quest_max:  num(t, "quest_max",  10),
+            quest_prob: num(t, "quest_prob", 0.5),
+            time_min:   num(t, "time_min",   1),
+            time_max:   num(t, "time_max",   10),
+            time_prob:  num(t, "time_prob",  0.5),
+            time_max_score: num(t, "time_max_score", 50),
+            countdown_sec:  num(t, "countdown_sec",  1800),
           };
         });
 
         setAllBots(pool);
         setSelectedBots(pickFromPool(pool, typeComposition));
-        setSupabaseLoaded(true);
       }
     } catch (e) {
       console.error("Supabase 로드 실패:", e);
