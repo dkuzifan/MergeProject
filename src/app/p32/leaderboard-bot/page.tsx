@@ -107,13 +107,13 @@ function formatMinutes(minutes: number): string {
   return h > 0 ? `${h}시간 ${m}분` : `${m}분`;
 }
 
-const TYPE_COLORS: Record<string, string> = {
-  "공격형": "bg-red-100    text-red-700    dark:bg-red-900/30    dark:text-red-400",
-  "균형형": "bg-blue-100   text-blue-700   dark:bg-blue-900/30   dark:text-blue-400",
-  "시간형": "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-  "수동형": "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
-  "잠수형": "bg-gray-100   text-gray-600   dark:bg-gray-700/50   dark:text-gray-400",
-  "전략형": "bg-teal-100   text-teal-700   dark:bg-teal-900/30   dark:text-teal-400",
+const TYPE_COLORS: Record<number, string> = {
+  1: "bg-red-100    text-red-700    dark:bg-red-900/30    dark:text-red-400",
+  2: "bg-blue-100   text-blue-700   dark:bg-blue-900/30   dark:text-blue-400",
+  3: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+  4: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+  5: "bg-gray-100   text-gray-600   dark:bg-gray-700/50   dark:text-gray-400",
+  6: "bg-teal-100   text-teal-700   dark:bg-teal-900/30   dark:text-teal-400",
 };
 
 // ─────────────────────────────────────────────
@@ -122,7 +122,7 @@ const TYPE_COLORS: Record<string, string> = {
 export default function LeaderboardBotPage() {
   const [allBots, setAllBots]           = useState<BotConfig[]>(INITIAL_POOL);
   const [selectedBots, setSelectedBots] = useState<BotConfig[]>(() => pickFromPool(INITIAL_POOL, DEFAULT_COMPOSITION));
-  const [botTypes, setBotTypes]         = useState(MOCK_BOT_TYPES.map(t => ({ id: t.id, type_name: t.type_name })));
+  const [botTypes, setBotTypes]         = useState(MOCK_BOT_TYPES.map(t => ({ id: t.id, type_name: `타입 ${t.id}` })));
 
   const [typeComposition, setTypeComposition] = useState<Record<number, number>>(DEFAULT_COMPOSITION);
   const [compositionError, setCompositionError] = useState<string | null>(null);
@@ -454,7 +454,7 @@ export default function LeaderboardBotPage() {
               return (
                 <div key={type.id} className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between">
-                    <span className={`text-xs px-2 py-0.5 rounded font-medium ${TYPE_COLORS[type.type_name] ?? "bg-gray-100 text-gray-600"}`}>
+                    <span className={`text-xs px-2 py-0.5 rounded font-medium ${TYPE_COLORS[type.id] ?? "bg-gray-100 text-gray-600"}`}>
                       {type.type_name}
                     </span>
                     <span className="text-xs text-gray-400">/{poolCount}</span>
@@ -487,7 +487,7 @@ export default function LeaderboardBotPage() {
                 const cnt = selectedBots.filter(b => b.type_id === type.id).length;
                 if (cnt === 0) return null;
                 return (
-                  <span key={type.id} className={`text-xs px-2 py-0.5 rounded font-medium ${TYPE_COLORS[type.type_name] ?? "bg-gray-100 text-gray-600"}`}>
+                  <span key={type.id} className={`text-xs px-2 py-0.5 rounded font-medium ${TYPE_COLORS[type.id] ?? "bg-gray-100 text-gray-600"}`}>
                     {type.type_name} {cnt}명
                   </span>
                 );
@@ -836,7 +836,7 @@ export default function LeaderboardBotPage() {
                       <td className="px-3 py-2 text-gray-400">{bot.id}</td>
                       <td className="px-3 py-2 font-medium">{bot.bot_name}</td>
                       <td className="px-3 py-2">
-                        <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${TYPE_COLORS[bot.type_name] ?? "bg-gray-100 text-gray-600"}`}>
+                        <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${TYPE_COLORS[bot.type_id] ?? "bg-gray-100 text-gray-600"}`}>
                           {bot.type_name}
                         </span>
                       </td>
