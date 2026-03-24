@@ -189,10 +189,18 @@ export default function LeaderboardBotPage() {
       ]);
 
       if (types?.length && botRows?.length) {
-        setBotTypes(types.map((t: Record<string, unknown>) => ({
-          id: t.id as number,
-          type_name: t.type_name as string,
-        })));
+        const loadedIds = new Set(types.map((t: Record<string, unknown>) => t.id as number));
+        const mergedTypes = [
+          ...types.map((t: Record<string, unknown>) => ({
+            id: t.id as number,
+            type_name: t.type_name as string,
+          })),
+          // Supabase에 없는 타입은 목 데이터 이름으로 임시 추가
+          ...MOCK_BOT_TYPES
+            .filter(t => !loadedIds.has(t.id))
+            .map(t => ({ id: t.id, type_name: `${t.type_name} (임시)` })),
+        ].sort((a, b) => a.id - b.id);
+        setBotTypes(mergedTypes);
 
         const pool: BotConfig[] = botRows.map((b: Record<string, unknown>) => {
           const t = (types.find((t: Record<string, unknown>) => t.id === b.bot_type_id) ?? {}) as Record<string, unknown>;
