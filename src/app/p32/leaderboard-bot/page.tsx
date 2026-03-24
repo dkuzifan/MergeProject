@@ -784,6 +784,18 @@ export default function LeaderboardBotPage() {
                   <p className="text-xs mt-1 text-gray-300 dark:text-gray-600">좌측에서 값을 입력하고 실행 버튼을 누르세요</p>
                 </div>
               )}
+
+              {/* 리셋 버튼 */}
+              {results && (
+                <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-800">
+                  <button
+                    onClick={() => { setResults(null); setPrevResults(null); }}
+                    className="w-full py-2 rounded-lg text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    🔄 리더보드 초기화
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
